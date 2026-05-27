@@ -85,7 +85,7 @@ def check_source_today(source_name):
     return False, None
 
 
-def save_article_to_json(title, source, url, mp3_filename, article_date=None):
+def save_article_to_json(title, source, url, mp3_filename, article_date=None, publish_time=None):
     """Append article entry to articles.json"""
     try:
         os.makedirs(os.path.dirname(ARTICLES_JSON), exist_ok=True)
@@ -112,6 +112,8 @@ def save_article_to_json(title, source, url, mp3_filename, article_date=None):
             "audio": mp3_filename,
             "created_at": datetime.now().isoformat(),
         }
+        if publish_time:
+            article["publish_time"] = publish_time
         existing.append(article)
         existing.sort(key=lambda x: x.get("date", ""), reverse=True)
 
@@ -162,6 +164,7 @@ def parse_args():
     parser.add_argument("--source", type=str, default="", help="Source name (e.g. 卢克文工作室)")
     parser.add_argument("--url", type=str, default="", help="Article URL")
     parser.add_argument("--date", type=str, default="", help="Article date (YYYY-MM-DD)")
+    parser.add_argument("--publish-time", type=str, default="", help="Article publish time (YYYY-MM-DDTHH:MM:SS)")
     parser.add_argument("--check-source", type=str, help="Check if source already has today's article")
     return parser.parse_args()
 
@@ -224,7 +227,7 @@ async def main():
         return
 
     # Update articles.json
-    save_article_to_json(args.title, args.source, args.url or "", mp3_filename, args.date or None)
+    save_article_to_json(args.title, args.source, args.url or "", mp3_filename, args.date or None, args.publish_time or None)
     log(f"[DONE] {args.source} processing complete")
 
 

@@ -480,11 +480,20 @@ async def get_maobidao_latest() -> dict:
                     link_m = re.search(r'<link[^>]*><!\[CDATA\[([^\]]+)\]\]></link>', item)
                     if not link_m:
                         link_m = re.search(r'<link[^>]*>([^<]+)</link>', item)
+                    pubdate_m = re.search(r'<pubDate>([^<]+)</pubDate>', item)
+                    publish_time = ""
+                    if pubdate_m:
+                        from datetime import datetime as dt
+                        try:
+                            pub = dt.strptime(pubdate_m.group(1).strip(), "%a, %d %b %Y %H:%M:%S %z")
+                            publish_time = pub.strftime("%Y-%m-%dT%H:%M:%S")
+                        except Exception:
+                            pass
                     if title_m and link_m:
                         title = title_m.group(1).strip()
                         url = link_m.group(1).strip()
                         log(f"[INFO] maobidao RSS: 《{title}》")
-                        return {"title": title, "url": url}
+                        return {"title": title, "url": url, "publish_time": publish_time}
     except Exception as e:
         log(f"[WARN] maobidao RSS: {e}")
 
@@ -512,10 +521,20 @@ async def get_fugay_latest() -> dict:
                         title = m.group(1).strip()
                     else:
                         title = f"刘备教授·{date.strftime('%Y-%m-%d')}"
+                    # Try to extract publish time from HTML
+                    publish_time = ""
+                    time_m = re.search(r'<time[^>]*datetime="([^"]+)"', html)
+                    if time_m:
+                        publish_time = time_m.group(1)
+                    else:
+                        time_m = re.search(r'发表于\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})', html)
+                        if time_m:
+                            publish_time = time_m.group(1).replace(' ', 'T')
                     return {
                         "title": title,
                         "url": url,
                         "datetime": date.strftime("%Y-%m-%d"),
+                        "publish_time": publish_time,
                     }
         except Exception:
             pass
@@ -560,6 +579,7 @@ async def process_source(source: dict) -> dict:
     article_title = article_info.get("title", "未知标题")
     article_url = article_info.get("url", "")
     article_date = article_info.get("datetime", "")
+    article_publish_time = article_info.get("publish_time", "")
     
     log(f"[INFO] {name}: 最新文章《{article_title}》{article_date}")
     log(f"[INFO] {name}: URL = {article_url}")
@@ -586,6 +606,7 @@ async def process_source(source: dict) -> dict:
         "name": name,
         "title": article_title,
         "date": article_date,
+        "publish_time": article_publish_time,
         "url": article_url,
         "mp3_path": output_path if success else None,
         "success": success,
@@ -673,6 +694,8 @@ def save_articles_json(results: list):
                 "audio": os.path.basename(r["mp3_path"]) if r.get("mp3_path") else "",
                 "created_at": datetime.now().isoformat(),
             }
+            if r.get("publish_time"):
+                article["publish_time"] = r["publish_time"]
             existing.append(article)
         
         # 按日期倒序

@@ -52,6 +52,12 @@
         const month = d.getMonth() + 1;
         const day = d.getDate();
         const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        // Include time if available and valid
+        const hours = d.getHours();
+        const mins = d.getMinutes();
+        if (hours !== 0 || mins !== 0) {
+            return `${month}月${day}日 周${weekdays[d.getDay()]} ${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
+        }
         return `${month}月${day}日 周${weekdays[d.getDay()]}`;
     };
 
@@ -68,7 +74,7 @@
         card.innerHTML = `
             <div class="card-header">
                 <span class="source-tag ${cls}">${article.source}</span>
-                <span class="card-date">${formatDate(article.date)}</span>
+                <span class="card-date">${formatDate(article.publish_time || article.date)}</span>
             </div>
             <div class="card-title">${article.title}</div>
             <div class="card-actions">
@@ -97,7 +103,7 @@
                 <div class="card-meta">
                     <span>${article.source}</span>
                     <span class="dot"></span>
-                    <span>${formatDate(article.date)}</span>
+                    <span>${formatDate(article.publish_time || article.date)}</span>
                 </div>
             </div>
         `;

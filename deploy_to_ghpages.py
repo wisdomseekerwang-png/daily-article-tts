@@ -25,6 +25,7 @@ TEMP_CLONE_DIR = PROJECT_DIR / ".gh-pages-deploy"
 TOKEN_FILE = PROJECT_DIR / ".github_token"
 
 # Source dirs (local)
+LOCAL_WEB_DIR = PROJECT_DIR / "web"
 LOCAL_DATA_DIR = PROJECT_DIR / "web" / "data"
 LOCAL_AUDIO_DIR = PROJECT_DIR / "audio"
 
@@ -91,7 +92,18 @@ def main():
             run_git(["git", "checkout", "-b", "gh-pages"], cwd=TEMP_CLONE_DIR)
             run_git(["git", "remote", "add", "origin", auth_url], cwd=TEMP_CLONE_DIR)
 
-    # Step 2: Copy articles.json
+    # Step 2: Sync web assets (js, css, index.html)
+    web_assets = ["index.html", "js/app.js", "css/style.css"]
+    for asset in web_assets:
+        local_file = LOCAL_WEB_DIR / asset
+        remote_file = TEMP_CLONE_DIR / asset
+        if local_file.exists():
+            remote_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(local_file, remote_file)
+            run_git(["git", "add", asset], cwd=TEMP_CLONE_DIR)
+            print(f"  Synced: {asset}")
+
+    # Step 3: Copy articles.json
     local_articles = LOCAL_DATA_DIR / "articles.json"
     remote_articles = REMOTE_DATA_DIR / "articles.json"
     changes = False

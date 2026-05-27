@@ -60,9 +60,10 @@ async def fetch_article_meta(article_id: str, client: httpx.AsyncClient) -> dict
         title_m = re.search(r'<h1[^>]*>(.*?)</h1>', html, re.DOTALL)
         title = re.sub(r'<[^>]+>', '', title_m.group(1)).strip() if title_m else ""
 
-        # Date
-        date_m = re.search(r'(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}', html)
-        date_str = date_m.group(1) if date_m else ""
+        # Date and time
+        dt_m = re.search(r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})', html)
+        date_str = dt_m.group(1)[:10] if dt_m else ""
+        time_str = dt_m.group(1) if dt_m else ""
 
         # Sidebar IDs
         sidebar_ids = list(set(re.findall(r'/art\?id=([a-f0-9]{32})', html)))
@@ -74,6 +75,7 @@ async def fetch_article_meta(article_id: str, client: httpx.AsyncClient) -> dict
             "url": url,
             "title": title,
             "date": date_str,
+            "publish_time": time_str.replace(' ', 'T') if time_str else "",
             "sidebar_ids": sidebar_ids,
             "html": html,  # Keep for content extraction if needed
         }
@@ -243,6 +245,7 @@ async def main():
                         "title": atitle,
                         "url": r.get("url", ""),
                         "audio": mp3_name if tts_ok else "",
+                        "publish_time": r.get("publish_time", ""),
                         "created_at": datetime.now(CN_TZ).isoformat(),
                     }
                     new_articles.append(article_entry)
