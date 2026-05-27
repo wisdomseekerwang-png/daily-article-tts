@@ -19,40 +19,62 @@
             <h1>早报电台</h1>
             <p class="subtitle">猫笔刀 &middot; 刘备教授 &middot; 孥孥的大树 &middot; 卢克文工作室 &middot; 海里的小龙龙 &middot; 远方青木 &middot; 每日语音播报</p>
             <div class="schedule-row">
-                <label class="schedule-label">
-                    <input type="checkbox" id="schedule-toggle" checked>
-                    每天 <select id="schedule-hour">
-                        <option value="7">07</option>
-                        <option value="8">08</option>
-                        <option value="9">09</option>
-                        <option value="10" selected>10</option>
-                        <option value="11">11</option>
-                        <option value="12">12</option>
-                        <option value="13">13</option>
-                        <option value="14">14</option>
-                        <option value="15">15</option>
-                        <option value="16">16</option>
-                        <option value="17">17</option>
-                        <option value="18">18</option>
-                        <option value="19">19</option>
-                        <option value="20">20</option>
-                        <option value="21">21</option>
-                        <option value="22">22</option>
-                    </select>:<select id="schedule-minute">
-                        <option value="0" selected>00</option>
-                        <option value="5">05</option>
-                        <option value="10">10</option>
-                        <option value="15">15</option>
-                        <option value="20">20</option>
-                        <option value="25">25</option>
-                        <option value="30">30</option>
-                        <option value="35">35</option>
-                        <option value="40">40</option>
-                        <option value="45">45</option>
-                        <option value="50">50</option>
-                        <option value="55">55</option>
-                    </select> 自动播放
-                </label>
+                <div class="schedule-times">
+                    <label class="schedule-label">
+                        <input type="checkbox" id="schedule-toggle" checked>
+                        定时播放
+                    </label>
+                    <div id="schedule-slots" class="schedule-slots">
+                        <div class="schedule-slot" data-slot="0">
+                            <input type="checkbox" class="slot-toggle" checked>
+                            <select class="slot-hour">
+                                <option value="6">06</option><option value="7">07</option><option value="8" selected>08</option>
+                                <option value="9">09</option><option value="10">10</option><option value="11">11</option>
+                                <option value="12">12</option><option value="13">13</option><option value="14">14</option>
+                                <option value="15">15</option><option value="16">16</option><option value="17">17</option>
+                                <option value="18">18</option><option value="19">19</option><option value="20">20</option>
+                                <option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                            </select>:<select class="slot-minute">
+                                <option value="0" selected>00</option><option value="5">05</option><option value="10">10</option>
+                                <option value="15">15</option><option value="20">20</option><option value="25">25</option>
+                                <option value="30">30</option><option value="35">35</option><option value="40">40</option>
+                                <option value="45">45</option><option value="50">50</option><option value="55">55</option>
+                            </select>
+                        </div>
+                        <div class="schedule-slot" data-slot="1">
+                            <input type="checkbox" class="slot-toggle" checked>
+                            <select class="slot-hour">
+                                <option value="6">06</option><option value="7">07</option><option value="8">08</option>
+                                <option value="9">09</option><option value="10">10</option><option value="11">11</option>
+                                <option value="12" selected>12</option><option value="13">13</option><option value="14">14</option>
+                                <option value="15">15</option><option value="16">16</option><option value="17">17</option>
+                                <option value="18">18</option><option value="19">19</option><option value="20">20</option>
+                                <option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                            </select>:<select class="slot-minute">
+                                <option value="0" selected>00</option><option value="5">05</option><option value="10">10</option>
+                                <option value="15">15</option><option value="20">20</option><option value="25">25</option>
+                                <option value="30">30</option><option value="35">35</option><option value="40">40</option>
+                                <option value="45">45</option><option value="50">50</option><option value="55">55</option>
+                            </select>
+                        </div>
+                        <div class="schedule-slot" data-slot="2">
+                            <input type="checkbox" class="slot-toggle" checked>
+                            <select class="slot-hour">
+                                <option value="6">06</option><option value="7">07</option><option value="8">08</option>
+                                <option value="9">09</option><option value="10">10</option><option value="11">11</option>
+                                <option value="12">12</option><option value="13">13</option><option value="14">14</option>
+                                <option value="15">15</option><option value="16">16</option><option value="17">17</option>
+                                <option value="18">18</option><option value="19">19</option><option value="20" selected>20</option>
+                                <option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                            </select>:<select class="slot-minute">
+                                <option value="0" selected>00</option><option value="5">05</option><option value="10">10</option>
+                                <option value="15">15</option><option value="20">20</option><option value="25">25</option>
+                                <option value="30">30</option><option value="35">35</option><option value="40">40</option>
+                                <option value="45">45</option><option value="50">50</option><option value="55">55</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
                 <div class="header-actions">
                     <button id="btn-play-all" class="btn-play-all" title="播放全部文章">&#9654; 连播</button>
                     <button id="btn-notify" class="btn-notify" title="开启浏览器通知">&#128276;</button>

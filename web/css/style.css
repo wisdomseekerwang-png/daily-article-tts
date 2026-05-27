@@ -356,10 +356,53 @@ main {
     justify-content: center;
     gap: 12px;
 }
-.schedule-label {
+.schedule-times {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.schedule-slots {
+    display: flex;
+    gap: 8px;
+    transition: opacity 0.2s;
+}
+.schedule-slot {
     display: flex;
     align-items: center;
     gap: 4px;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    padding: 4px 8px;
+    transition: opacity 0.2s, background 0.2s;
+}
+.schedule-slot:hover { background: rgba(255,255,255,0.25); }
+.schedule-slot.slot-disabled {
+    opacity: 0.4;
+}
+.schedule-slot input[type="checkbox"] {
+    accent-color: #fff;
+    width: 13px;
+    height: 13px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.schedule-slot select {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: #fff;
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.schedule-slot select option { color: #333; background: #fff; }
+.schedule-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 13px;
     opacity: 0.9;
     cursor: pointer;
@@ -370,16 +413,6 @@ main {
     height: 15px;
     cursor: pointer;
 }
-.schedule-label select {
-    background: rgba(255,255,255,0.2);
-    border: 1px solid rgba(255,255,255,0.4);
-    color: #fff;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 13px;
-    cursor: pointer;
-}
-.schedule-label select option { color: #333; background: #fff; }
 .btn-notify {
     background: rgba(255,255,255,0.2);
     border: 1px solid rgba(255,255,255,0.4);
@@ -429,4 +462,6 @@ main {
     .card-today .card-title { font-size: 15px; }
     .history-card .card-body .card-title { font-size: 13px; }
     .schedule-row { flex-direction: column; gap: 8px; }
+    .schedule-slots { flex-direction: column; gap: 6px; width: 100%; max-width: 280px; }
+    .schedule-slot { justify-content: center; }
 }

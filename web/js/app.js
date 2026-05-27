@@ -4,14 +4,16 @@
 
     const DATA_URL = 'data/articles.json';
     const AUDIO_DIR = 'audio/';
-    const STORAGE_KEY = 'radio_schedule';
-    const DEFAULT_HOUR = 10;
-    const DEFAULT_MINUTE = 0;
+    const STORAGE_KEY = 'radio_schedule_v2';
+    const DEFAULT_SLOTS = [
+        { enabled: true, hour: 8, minute: 0 },
+        { enabled: true, hour: 12, minute: 0 },
+        { enabled: true, hour: 20, minute: 0 },
+    ];
 
     let articles = [];
     let currentIndex = -1;
     let scheduleTimer = null;
-    let notifiedToday = null;
     const audio = new Audio();
 
     // DOM Elements
@@ -227,9 +229,28 @@
     const getScheduleConfig = () => {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) return JSON.parse(saved);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Migrate from old single-time format
+                if (parsed.hour !== undefined && !parsed.slots) {
+                    return {
+                        enabled: parsed.enabled ?? true,
+                        slots: [
+                            { enabled: true, hour: parsed.hour, minute: parsed.minute ?? 0 },
+                            { enabled: false, hour: 12, minute: 0 },
+                            { enabled: false, hour: 20, minute: 0 },
+                        ],
+                        notifiedDates: {},
+                    };
+                }
+                // Ensure 3 slots exist
+                while (parsed.slots.length < 3) {
+                    parsed.slots.push({ enabled: false, hour: 9, minute: 0 });
+                }
+                return parsed;
+            }
         } catch(e) {}
-        return { enabled: true, hour: DEFAULT_HOUR, minute: DEFAULT_MINUTE, notifiedDate: null };
+        return { enabled: true, slots: DEFAULT_SLOTS.map(s => ({...s})), notifiedDates: {} };
     };
 
     const saveScheduleConfig = (config) => {
@@ -250,23 +271,28 @@
         const minute = bj.getMinutes();
         const today = getTodayStr();
 
-        // Already notified today
-        if (config.notifiedDate === today) return;
+        // Check each slot
+        for (let i = 0; i < config.slots.length; i++) {
+            const slot = config.slots[i];
+            if (!slot.enabled) continue;
+            if (hour !== slot.hour || minute !== slot.minute) continue;
 
-        if (hour === config.hour && minute === config.minute && articles.length > 0) {
-            // Find today's articles, or latest
+            // Per-slot notification tracking
+            const slotNotifiedKey = `${today}-slot${i}`;
+            if (config.notifiedDates[slotNotifiedKey]) continue;
+
+            if (articles.length === 0) continue;
+
+            // Mark this slot as notified
+            config.notifiedDates[slotNotifiedKey] = true;
+            saveScheduleConfig(config);
+
+            // Find today's articles
             const todayArticles = articles.filter(a => a.date === today);
 
-            // Mark as notified
-            config.notifiedDate = today;
-            saveScheduleConfig(config);
-            notifiedToday = today;
-
             if (todayArticles.length > 0) {
-                // Play all today's articles in sequence
-                showAlarm(`今日早报已更新，共 ${todayArticles.length} 篇，开始连播...`);
+                showAlarm(`定时播放 (${String(slot.hour).padStart(2,'0')}:${String(slot.minute).padStart(2,'0')})：今日早报共 ${todayArticles.length} 篇，开始连播...`);
                 setTimeout(() => {
-                    // Find the index of the first today article in the main list
                     const startIdx = articles.findIndex(a => a.date === today);
                     if (startIdx >= 0) {
                         isPlayAll = true;
@@ -276,12 +302,12 @@
                     }
                 }, 1500);
             } else {
-                // No today's articles, play latest
-                showAlarm('定时播放：正在播放最新早报...');
+                showAlarm(`定时播放 (${String(slot.hour).padStart(2,'0')}:${String(slot.minute).padStart(2,'0')})：正在播放最新早报...`);
                 setTimeout(() => {
                     showPlayer(0);
                 }, 1500);
             }
+            return; // Only trigger one slot per minute
         }
     };
 
@@ -332,22 +358,47 @@
 
     // ============== UI 控件 ==============
     const scheduleToggle = document.getElementById('schedule-toggle');
-    const scheduleHour = document.getElementById('schedule-hour');
-    const scheduleMinute = document.getElementById('schedule-minute');
     const btnNotify = document.getElementById('btn-notify');
     const btnPlayAll = document.getElementById('btn-play-all');
+    const slotElements = document.querySelectorAll('.schedule-slot');
+
+    // Build a helper to read slot UI values
+    const readSlotUI = () => {
+        const slots = [];
+        slotElements.forEach((el, i) => {
+            const toggle = el.querySelector('.slot-toggle');
+            const hourSel = el.querySelector('.slot-hour');
+            const minuteSel = el.querySelector('.slot-minute');
+            slots.push({
+                enabled: toggle.checked,
+                hour: parseInt(hourSel.value),
+                minute: parseInt(minuteSel.value),
+            });
+        });
+        return slots;
+    };
 
     // Load saved config
     const initConfig = getScheduleConfig();
     scheduleToggle.checked = initConfig.enabled;
-    scheduleHour.value = initConfig.hour;
-    scheduleMinute.value = initConfig.minute ?? DEFAULT_MINUTE;
-    notifiedToday = initConfig.notifiedDate;
+    slotElements.forEach((el, i) => {
+        const slot = initConfig.slots[i];
+        if (slot) {
+            el.querySelector('.slot-toggle').checked = slot.enabled;
+            el.querySelector('.slot-hour').value = slot.hour;
+            el.querySelector('.slot-minute').value = slot.minute ?? 0;
+        }
+        // Style disabled slots
+        if (!slot || !slot.enabled) el.classList.add('slot-disabled');
+    });
 
     scheduleToggle.addEventListener('change', () => {
         const config = getScheduleConfig();
         config.enabled = scheduleToggle.checked;
         saveScheduleConfig(config);
+        // Toggle slot visibility
+        document.getElementById('schedule-slots').style.opacity = scheduleToggle.checked ? '1' : '0.4';
+        document.getElementById('schedule-slots').style.pointerEvents = scheduleToggle.checked ? 'auto' : 'none';
         if (scheduleToggle.checked) {
             startSchedule();
         } else if (scheduleTimer) {
@@ -356,18 +407,29 @@
         }
     });
 
-    scheduleHour.addEventListener('change', () => {
-        const config = getScheduleConfig();
-        config.hour = parseInt(scheduleHour.value);
-        config.notifiedDate = null;
-        saveScheduleConfig(config);
-    });
+    // Slot change handlers
+    slotElements.forEach((el, i) => {
+        const toggle = el.querySelector('.slot-toggle');
+        const hourSel = el.querySelector('.slot-hour');
+        const minuteSel = el.querySelector('.slot-minute');
 
-    scheduleMinute.addEventListener('change', () => {
-        const config = getScheduleConfig();
-        config.minute = parseInt(scheduleMinute.value);
-        config.notifiedDate = null;
-        saveScheduleConfig(config);
+        const saveSlot = () => {
+            const config = getScheduleConfig();
+            config.slots[i].enabled = toggle.checked;
+            config.slots[i].hour = parseInt(hourSel.value);
+            config.slots[i].minute = parseInt(minuteSel.value);
+            // Clear notification for this slot so it can re-trigger
+            const today = getTodayStr();
+            delete config.notifiedDates[`${today}-slot${i}`];
+            saveScheduleConfig(config);
+        };
+
+        toggle.addEventListener('change', () => {
+            el.classList.toggle('slot-disabled', !toggle.checked);
+            saveSlot();
+        });
+        hourSel.addEventListener('change', saveSlot);
+        minuteSel.addEventListener('change', saveSlot);
     });
 
     btnNotify.addEventListener('click', async () => {
