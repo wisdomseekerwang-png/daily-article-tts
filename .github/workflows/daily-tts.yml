@@ -29,23 +29,54 @@ jobs:
         run: |
           pip install edge-tts httpx
 
+      - name: Fetch existing articles.json from gh-pages
+        run: |
+          mkdir -p output/data
+          # Try to fetch existing articles.json from gh-pages for accumulation
+          curl -sL -o output/data/articles.json \
+            "https://raw.githubusercontent.com/${{ github.repository }}/gh-pages/data/articles.json" \
+            2>/dev/null || echo '[]' > output/data/articles.json
+          # Validate JSON
+          python -c "import json; json.load(open('output/data/articles.json'))" 2>/dev/null || echo '[]' > output/data/articles.json
+
       - name: Fetch articles & generate TTS
         run: |
           python fetch_articles_tts.py --serverless --output-dir ./output
+          # Merge: if script generated a new articles.json, merge with existing
+          if [ -f "output/articles.json" ]; then
+            python -c "
+            import json
+            new = json.load(open('output/articles.json'))
+            try:
+                old = json.load(open('output/data/articles.json'))
+            except:
+                old = []
+            old_keys = {(a['date'], a['source']) for a in old}
+            for a in new:
+                if (a['date'], a['source']) not in old_keys:
+                    old.append(a)
+            old.sort(key=lambda x: x['date'], reverse=True)
+            json.dump(old, open('output/data/articles.json','w'), ensure_ascii=False, indent=2)
+            print(f'Merged: {len(old)} articles total ({len(new)} new)')
+            "
+            # Copy audio files
+            if [ -d "output/audio" ]; then
+              cp output/audio/*.mp3 dist/audio/ 2>/dev/null || true
+            fi
+            cp output/data/articles.json dist/data/
+          fi
 
       - name: Build web app
         run: |
           mkdir -p dist/data dist/audio dist/css dist/js
-          # Copy articles.json
-          cp output/articles.json dist/data/
+          # Copy articles.json (already merged in previous step)
+          if [ -f "output/data/articles.json" ]; then
+            cp output/data/articles.json dist/data/
+          fi
           # Copy web assets
           cp web/index.html dist/
           cp web/css/style.css dist/css/
           cp web/js/app.js dist/js/
-          # Copy new MP3 files
-          if [ -d "output/audio" ]; then
-            cp output/audio/*.mp3 dist/audio/ 2>/dev/null || true
-          fi
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4

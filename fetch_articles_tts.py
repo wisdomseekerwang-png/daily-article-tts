@@ -80,6 +80,30 @@ def log(msg):
         print(f"[LOG ERROR] {e}")
 
 
+async def search_sogou_maobidao() -> dict:
+    """通过搜狗微信搜索获取猫笔刀最新文章URL"""
+    try:
+        sogou_url = "https://weixin.sogou.com/weixin"
+        async with httpx.AsyncClient(
+            timeout=15, follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        ) as client:
+            resp = await client.get(sogou_url, params={"type": "1", "query": "猫笔刀", "ie": "utf8"})
+            html = resp.text
+            # Extract article links: mp.weixin.qq.com links
+            matches = re.findall(r'<a[^>]+href="(https?://mp\.weixin\.qq\.com/s[^"]*)"[^>]*>([^<]{5,50})</a>', html)
+            for url, title in matches:
+                title = title.strip()
+                if any(kw in title for kw in ["招财大牛猫", "猫笔刀"]) or not any(skip in title for skip in ["公众号", "小程序", "关注"]):
+                    log(f"[INFO] 搜狗搜索找到: {title[:30]}")
+                    return {"title": title, "url": url, "source": "猫笔刀"}
+            log("[WARN] 搜狗搜索未找到有效文章")
+            return {}
+    except Exception as e:
+        log(f"[WARN] 搜狗搜索失败: {e}")
+        return {}
+
+
 async def search_latest_article(name: str, query: str) -> dict:
     """通过 wechat-article-search 脚本搜索最新文章（仅用于刘备教授，因为fugay是动态渲染）"""
     try:
@@ -170,43 +194,54 @@ async def fetch_article_content(url: str) -> str:
 
 async def fetch_maobidao(url: str) -> str:
     """抓取猫笔刀文章"""
-    try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-        ) as client:
-            resp = await client.get(url)
-            html = resp.text
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            ) as client:
+                resp = await client.get(url)
+                html = resp.text
 
-            # Try to extract content from <article> tag first
-            article_match = re.search(r'<article[^>]*>(.*?)</article>', html, re.DOTALL)
-            if article_match:
-                content = article_match.group(1)
-            else:
-                # Try entry-content div
-                entry_match = re.search(r'class="entry-content[^"]*"[^>]*>(.*?)</div>\s*<!--\s*\.entry-content', html, re.DOTALL)
-                if entry_match:
-                    content = entry_match.group(1)
+                if len(html) < 5000:
+                    log(f"[WARN] maobidao article too small ({len(html)} bytes), attempt {attempt+1}/3")
+                    await asyncio.sleep(2)
+                    continue
+
+                # Try to extract content from <article> tag first
+                article_match = re.search(r'<article[^>]*>(.*?)</article>', html, re.DOTALL)
+                if article_match:
+                    content = article_match.group(1)
                 else:
-                    content = html
+                    # Try entry-content div
+                    entry_match = re.search(r'class="entry-content[^"]*"[^>]*>(.*?)</div>\s*<!--\s*\.entry-content', html, re.DOTALL)
+                    if entry_match:
+                        content = entry_match.group(1)
+                    else:
+                        content = html
 
-            # 提取 <p> 标签内容
-            paragraphs = re.findall(r'<p[^>]*>(.*?)</p>', content, re.DOTALL)
-            text_parts = []
-            for p in paragraphs:
-                t = clean_article_text(p)
-                if len(t) > 15:
-                    text_parts.append(t)
+                # 提取 <p> 标签内容
+                paragraphs = re.findall(r'<p[^>]*>(.*?)</p>', content, re.DOTALL)
+                text_parts = []
+                for p in paragraphs:
+                    t = clean_article_text(p)
+                    if len(t) > 15:
+                        text_parts.append(t)
 
-            if text_parts:
-                return ' '.join(text_parts)
+                if text_parts:
+                    return ' '.join(text_parts)
 
-            # 备用：提取中文段落
-            chinese = re.findall(r'[\u4e00-\u9fff][^\n<]{10,}', html)
-            text_parts = [clean_article_text(c) for c in chinese if len(c) > 15][:30]
-            return ' '.join(text_parts)
-    except Exception as e:
-        log(f"[ERROR] maobidao fetch failed: {e}")
-        return ""
+                # 备用：提取中文段落
+                chinese = re.findall(r'[\u4e00-\u9fff][^\n<]{10,}', html)
+                text_parts = [clean_article_text(c) for c in chinese if len(c) > 15][:30]
+                if text_parts:
+                    return ' '.join(text_parts)
+
+                log(f"[WARN] maobidao: 无内容, attempt {attempt+1}/3")
+                await asyncio.sleep(2)
+        except Exception as e:
+            log(f"[ERROR] maobidao fetch attempt {attempt+1}/3: {e}")
+            await asyncio.sleep(2)
+    return ""
 
 
 async def fetch_fugay(url: str) -> str:
@@ -338,6 +373,10 @@ async def process_source(source: dict) -> dict:
     # 猫笔刀：直接解析主页
     if name == "猫笔刀":
         article_info = await get_maobidao_latest()
+        # If homepage failed (CI environment), try direct sogou search
+        if not article_info:
+            log(f"[INFO] 猫笔刀: 主页失败，尝试搜狗搜索...")
+            article_info = await search_sogou_maobidao()
     # 刘备教授：主页+搜索脚本
     elif name == "刘备教授":
         # 先尝试直接抓取最近文章（最可靠）
