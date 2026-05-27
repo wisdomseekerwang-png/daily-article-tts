@@ -187,7 +187,15 @@
 
     audio.addEventListener('ended', () => {
         updatePlayButton();
-        playNext();
+        if (isPlayAll) {
+            if (currentIndex < articles.length - 1) {
+                showPlayer(currentIndex + 1);
+            } else {
+                stopPlayAll();
+            }
+        } else {
+            playNext();
+        }
     });
 
     audio.addEventListener('play', updatePlayButton);
@@ -238,24 +246,32 @@
         if (hour === config.hour && minute === config.minute && articles.length > 0) {
             // Find today's articles, or latest
             const todayArticles = articles.filter(a => a.date === today);
-            const target = todayArticles.length > 0 ? 0 : 0; // Play first available
 
             // Mark as notified
             config.notifiedDate = today;
             saveScheduleConfig(config);
             notifiedToday = today;
 
-            // Show alarm bar
-            showAlarm(todayArticles.length > 0
-                ? `今日早报已更新，共 ${todayArticles.length} 篇，正在播放...`
-                : '定时播放：正在播放最新早报...');
-
-            // Play
-            setTimeout(() => {
-                if (audio.paused) {
-                    showPlayer(target);
-                }
-            }, 1500);
+            if (todayArticles.length > 0) {
+                // Play all today's articles in sequence
+                showAlarm(`今日早报已更新，共 ${todayArticles.length} 篇，开始连播...`);
+                setTimeout(() => {
+                    // Find the index of the first today article in the main list
+                    const startIdx = articles.findIndex(a => a.date === today);
+                    if (startIdx >= 0) {
+                        isPlayAll = true;
+                        btnPlayAll.classList.add('playing');
+                        btnPlayAll.innerHTML = '&#9646;&#9646; 停止';
+                        showPlayer(startIdx);
+                    }
+                }, 1500);
+            } else {
+                // No today's articles, play latest
+                showAlarm('定时播放：正在播放最新早报...');
+                setTimeout(() => {
+                    showPlayer(0);
+                }, 1500);
+            }
         }
     };
 
@@ -309,6 +325,7 @@
     const scheduleHour = document.getElementById('schedule-hour');
     const scheduleMinute = document.getElementById('schedule-minute');
     const btnNotify = document.getElementById('btn-notify');
+    const btnPlayAll = document.getElementById('btn-play-all');
 
     // Load saved config
     const initConfig = getScheduleConfig();
@@ -360,6 +377,34 @@
         btnNotify.classList.add('notify-on');
         btnNotify.title = '通知已开启';
     }
+
+    // ============== 连播全部 ==============
+    let isPlayAll = false;
+
+    const playAllArticles = () => {
+        if (articles.length === 0) return;
+        isPlayAll = true;
+        showPlayer(0);
+        btnPlayAll.classList.add('playing');
+        btnPlayAll.innerHTML = '&#9646;&#9646; 停止';
+        showAlarm(`开始连播全部 ${articles.length} 篇文章...`);
+    };
+
+    const stopPlayAll = () => {
+        isPlayAll = false;
+        audio.pause();
+        audio.currentTime = 0;
+        btnPlayAll.classList.remove('playing');
+        btnPlayAll.innerHTML = '&#9654; 连播';
+    };
+
+    btnPlayAll.addEventListener('click', () => {
+        if (isPlayAll) {
+            stopPlayAll();
+        } else {
+            playAllArticles();
+        }
+    });
 
     // Load data
     fetch(DATA_URL)

@@ -171,21 +171,35 @@ async def fetch_article_content(url: str) -> str:
 async def fetch_maobidao(url: str) -> str:
     """抓取猫笔刀文章"""
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        ) as client:
+            resp = await client.get(url)
             html = resp.text
-            
+
+            # Try to extract content from <article> tag first
+            article_match = re.search(r'<article[^>]*>(.*?)</article>', html, re.DOTALL)
+            if article_match:
+                content = article_match.group(1)
+            else:
+                # Try entry-content div
+                entry_match = re.search(r'class="entry-content[^"]*"[^>]*>(.*?)</div>\s*<!--\s*\.entry-content', html, re.DOTALL)
+                if entry_match:
+                    content = entry_match.group(1)
+                else:
+                    content = html
+
             # 提取 <p> 标签内容
-            paragraphs = re.findall(r'<p[^>]*>(.*?)</p>', html, re.DOTALL)
+            paragraphs = re.findall(r'<p[^>]*>(.*?)</p>', content, re.DOTALL)
             text_parts = []
             for p in paragraphs:
                 t = clean_article_text(p)
                 if len(t) > 15:
                     text_parts.append(t)
-            
+
             if text_parts:
                 return ' '.join(text_parts)
-            
+
             # 备用：提取中文段落
             chinese = re.findall(r'[\u4e00-\u9fff][^\n<]{10,}', html)
             text_parts = [clean_article_text(c) for c in chinese if len(c) > 15][:30]
@@ -249,26 +263,40 @@ async def text_to_speech(text: str, output_path: str, source_name: str, article_
 
 async def get_maobidao_latest() -> dict:
     """直接解析 maobidao.cn 主页获取最新文章"""
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get("https://maobidao.cn/",
-                                   headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-            html = resp.text
-            # Pattern: <a href="https://maobidao.cn/maobidao/...">文章标题</a>
-            # Filter out #respond links and non-article links
-            matches = re.findall(r'<a href="(https://maobidao\.cn/maobidao/[^"#]+)"[^>]*>\s*([^<\n]{3,60})\s*</a>', html)
-            for url, title in matches:
-                title = title.strip()
-                # Skip navigation and meta links
-                if any(kw in title for kw in ["发表评论", "上页", "下页", "目录", "下载", "导航", "搜索"]):
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(
+                timeout=30,
+                follow_redirects=True,
+                verify=True,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            ) as client:
+                resp = await client.get("https://maobidao.cn/")
+                html = resp.text
+
+                if len(html) < 10000:
+                    log(f"[WARN] maobidao: 主页内容过小 ({len(html)} bytes), attempt {attempt+1}/3")
+                    await asyncio.sleep(3)
                     continue
-                if title and len(title) > 4:
-                    return {"title": title, "url": url}
-            log("[WARN] maobidao: 主页解析未找到文章")
-            return {}
-    except Exception as e:
-        log(f"[ERROR] maobidao homepage failed: {e}")
-        return {}
+
+                # Pattern: <a href="https://maobidao.cn/maobidao/...">文章标题</a>
+                matches = re.findall(r'<a href="(https://maobidao\.cn/maobidao/[^"#]+)"[^>]*>\s*([^<\n]{3,60})\s*</a>', html)
+                for url, title in matches:
+                    title = title.strip()
+                    # Skip navigation and meta links
+                    if any(kw in title for kw in ["发表评论", "上页", "下页", "目录", "下载", "导航", "搜索", "链接"]):
+                        continue
+                    if title and len(title) > 4:
+                        log(f"[INFO] maobidao: 找到文章《{title}》")
+                        return {"title": title, "url": url}
+                log(f"[WARN] maobidao: 主页解析未匹配到文章 (found {len(matches)} links, attempt {attempt+1}/3)")
+                await asyncio.sleep(3)
+        except Exception as e:
+            log(f"[ERROR] maobidao attempt {attempt+1}/3: {e}")
+            await asyncio.sleep(3)
+
+    log("[WARN] maobidao: 所有尝试均失败，使用备用URL")
+    return {}
 
 
 async def get_fugay_latest() -> dict:
@@ -320,8 +348,8 @@ async def process_source(source: dict) -> dict:
     if not article_info or not article_info.get("url"):
         # 备用已知URL
         fallbacks = {
-            "猫笔刀": {"title": "一个潜在的雷", "url": "https://maobidao.cn/maobidao/tech-comparison-housing-stock-risk/"},
-            "刘备教授": {"title": "新版股王登场", "url": "https://www.fugay.com/2026/05/18-lbjs/"},
+            "猫笔刀": {"title": "瞬间恶念", "url": "https://maobidao.cn/maobidao/parent-child-sports-day-xiaomi-report-618-deals/"},
+            "刘备教授": {"title": "给芯片开个挂...", "url": "https://www.fugay.com/2026/05/26-lbjs/"},
         }
         article_info = fallbacks.get(name, {})
         if article_info:
