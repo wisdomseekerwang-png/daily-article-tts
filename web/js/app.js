@@ -5,7 +5,8 @@
     const DATA_URL = 'data/articles.json';
     const AUDIO_DIR = 'audio/';
     const STORAGE_KEY = 'radio_schedule';
-    const DEFAULT_HOUR = 10; // 默认北京时间 10:00
+    const DEFAULT_HOUR = 10;
+    const DEFAULT_MINUTE = 0;
 
     let articles = [];
     let currentIndex = -1;
@@ -210,7 +211,7 @@
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) return JSON.parse(saved);
         } catch(e) {}
-        return { enabled: true, hour: DEFAULT_HOUR, notifiedDate: null };
+        return { enabled: true, hour: DEFAULT_HOUR, minute: DEFAULT_MINUTE, notifiedDate: null };
     };
 
     const saveScheduleConfig = (config) => {
@@ -228,12 +229,13 @@
 
         const bj = getBeijingNow();
         const hour = bj.getHours();
+        const minute = bj.getMinutes();
         const today = getTodayStr();
 
         // Already notified today
         if (config.notifiedDate === today) return;
 
-        if (hour === config.hour && articles.length > 0) {
+        if (hour === config.hour && minute === config.minute && articles.length > 0) {
             // Find today's articles, or latest
             const todayArticles = articles.filter(a => a.date === today);
             const target = todayArticles.length > 0 ? 0 : 0; // Play first available
@@ -259,8 +261,8 @@
 
     const startSchedule = () => {
         if (scheduleTimer) clearInterval(scheduleTimer);
-        // Check every 30 seconds
-        scheduleTimer = setInterval(checkAutoPlay, 30000);
+        // Check every 10 seconds (precise to minute)
+        scheduleTimer = setInterval(checkAutoPlay, 10000);
         // Also check immediately
         checkAutoPlay();
         console.log('[早报电台] 定时播放已启动');
@@ -305,12 +307,14 @@
     // ============== UI 控件 ==============
     const scheduleToggle = document.getElementById('schedule-toggle');
     const scheduleHour = document.getElementById('schedule-hour');
+    const scheduleMinute = document.getElementById('schedule-minute');
     const btnNotify = document.getElementById('btn-notify');
 
     // Load saved config
     const initConfig = getScheduleConfig();
     scheduleToggle.checked = initConfig.enabled;
     scheduleHour.value = initConfig.hour;
+    scheduleMinute.value = initConfig.minute ?? DEFAULT_MINUTE;
     notifiedToday = initConfig.notifiedDate;
 
     scheduleToggle.addEventListener('change', () => {
@@ -328,7 +332,14 @@
     scheduleHour.addEventListener('change', () => {
         const config = getScheduleConfig();
         config.hour = parseInt(scheduleHour.value);
-        config.notifiedDate = null; // Reset so it can trigger again
+        config.notifiedDate = null;
+        saveScheduleConfig(config);
+    });
+
+    scheduleMinute.addEventListener('change', () => {
+        const config = getScheduleConfig();
+        config.minute = parseInt(scheduleMinute.value);
+        config.notifiedDate = null;
         saveScheduleConfig(config);
     });
 
