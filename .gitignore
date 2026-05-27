@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.mp3
+dist/
+nul
+.workbuddy/
+daily_article_notification.md
+test_*.mp3

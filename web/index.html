@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>早报电台 - 公众号文章语音</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
+</head>
+<body>
+    <header>
+        <div class="header-inner">
+            <h1>早报电台</h1>
+            <p class="subtitle">猫笔刀 &middot; 刘备教授 &middot; 每日语音播报</p>
+        </div>
+    </header>
+
+    <main>
+        <section id="today-section" class="today-section" style="display:none">
+            <h2>今日早报</h2>
+            <div id="today-cards" class="today-cards"></div>
+        </section>
+
+        <section class="history-section">
+            <h2>历史早报</h2>
+            <div id="article-list" class="article-list">
+                <p class="loading">加载中...</p>
+            </div>
+        </section>
+    </main>
+
+    <div id="player" class="player" style="display:none">
+        <div class="player-inner">
+            <div class="player-info">
+                <span id="player-source" class="player-source"></span>
+                <span id="player-title" class="player-title"></span>
+            </div>
+            <div class="player-controls">
+                <button id="btn-prev" class="player-btn" title="上一篇">&#9198;</button>
+                <button id="btn-play" class="player-btn play-btn" title="播放/暂停">&#9654;</button>
+                <button id="btn-next" class="player-btn" title="下一篇">&#9197;</button>
+            </div>
+            <div class="player-progress">
+                <span id="time-current">0:00</span>
+                <input type="range" id="progress-bar" min="0" max="100" value="0" step="0.1">
+                <span id="time-total">0:00</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
