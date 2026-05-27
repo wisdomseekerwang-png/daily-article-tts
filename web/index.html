@@ -8,10 +8,29 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
 </head>
 <body>
+    <div id="alarm-bar" class="alarm-bar" style="display:none">
+        <span class="alarm-icon">&#128276;</span>
+        <span id="alarm-text" class="alarm-text"></span>
+        <button id="alarm-dismiss" class="alarm-dismiss">&times;</button>
+    </div>
+
     <header>
         <div class="header-inner">
             <h1>早报电台</h1>
             <p class="subtitle">猫笔刀 &middot; 刘备教授 &middot; 每日语音播报</p>
+            <div class="schedule-row">
+                <label class="schedule-label">
+                    <input type="checkbox" id="schedule-toggle" checked>
+                    每天 <select id="schedule-hour">
+                        <option value="8">08</option>
+                        <option value="9">09</option>
+                        <option value="10" selected>10</option>
+                        <option value="11">11</option>
+                        <option value="12">12</option>
+                    </select>:00 自动播放
+                </label>
+                <button id="btn-notify" class="btn-notify" title="开启浏览器通知">&#128276;</button>
+            </div>
         </div>
     </header>
 

@@ -295,9 +295,99 @@ main {
     cursor: pointer;
 }
 
+/* Alarm bar */
+.alarm-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #ff6b35, #f7c948);
+    color: #fff;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 200;
+    font-size: 14px;
+    font-weight: 500;
+    animation: slideDown 0.3s ease;
+}
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+.alarm-icon { font-size: 18px; }
+.alarm-text { flex: 1; }
+.alarm-dismiss {
+    background: rgba(255,255,255,0.25);
+    border: none;
+    color: #fff;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Schedule row */
+.schedule-row {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+.schedule-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    opacity: 0.9;
+    cursor: pointer;
+}
+.schedule-label input[type="checkbox"] {
+    accent-color: #fff;
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+}
+.schedule-label select {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.schedule-label select option { color: #333; background: #fff; }
+.btn-notify {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.btn-notify:hover { background: rgba(255,255,255,0.35); }
+.btn-notify.notify-on {
+    background: rgba(255,255,255,0.35);
+    border-color: rgba(255,255,255,0.7);
+}
+
 /* Responsive */
 @media (max-width: 480px) {
     header h1 { font-size: 22px; }
     .card-today .card-title { font-size: 15px; }
     .history-card .card-body .card-title { font-size: 13px; }
+    .schedule-row { flex-direction: column; gap: 8px; }
 }
