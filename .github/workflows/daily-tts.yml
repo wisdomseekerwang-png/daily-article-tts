@@ -4,6 +4,8 @@ on:
   schedule:
     # UTC 00:00 = HK 08:00
     - cron: '0 0 * * *'
+    # UTC 16:00 = HK 00:00 (midnight check for late publishers)
+    - cron: '0 16 * * *'
   workflow_dispatch:
 
 permissions:
@@ -28,10 +30,28 @@ jobs:
       - name: Install dependencies
         run: pip install edge-tts httpx
 
-      - name: Fetch articles & generate TTS (刘備教授 only in CI)
+      # ===== Job 1: 刘备教授 (existing) =====
+      - name: Fetch 刘备教授 article & generate TTS
         run: python fetch_articles_tts.py --serverless --output-dir ./output
         continue-on-error: true
 
+      # ===== Job 2: 新4公众号 via wxredian =====
+      - name: Fetch wxredian state from gh-pages
+        run: |
+          mkdir -p output
+          curl -sL -o output/wxredian_state.json \
+            "https://raw.githubusercontent.com/${{ github.repository }}/gh-pages/wxredian_state.json" \
+            2>/dev/null || echo '{}' > output/wxredian_state.json
+
+      - name: Fetch 3 authors from wxredian (孥孥/卢克文/远方青木)
+        run: |
+          python scripts/fetch_wxredian.py \
+            --output-dir ./output \
+            --state-file ./output/wxredian_state.json \
+            --articles-json ./output/articles_wxredian.json
+        continue-on-error: true
+
+      # ===== Merge & Deploy =====
       - name: Fetch existing articles from gh-pages
         run: |
           mkdir -p output/data
@@ -40,13 +60,60 @@ jobs:
             2>/dev/null || true
           python scripts/validate_json.py output/data/articles.json 2>/dev/null || echo '[]' > output/data/articles.json
 
+      - name: Merge wxredian articles into main articles.json
+        run: |
+          python3 -c "
+          import json
+          # Load existing
+          try:
+              with open('output/data/articles.json') as f:
+                  existing = json.load(f)
+          except:
+              existing = []
+          # Load wxredian new articles
+          try:
+              with open('output/articles_wxredian.json') as f:
+                  wxredian = json.load(f)
+          except:
+              wxredian = []
+          # Dedup by (date, source)
+          existing_keys = {(a.get('date',''), a.get('source','')) for a in existing}
+          new_items = [a for a in wxredian if (a.get('date',''), a.get('source','')) not in existing_keys]
+          existing.extend(new_items)
+          existing.sort(key=lambda x: x.get('date',''), reverse=True)
+          with open('output/data/articles.json', 'w', encoding='utf-8') as f:
+              json.dump(existing, f, ensure_ascii=False, indent=2)
+          print(f'Merged: {len(new_items)} new from wxredian, {len(existing)} total')
+          # Also merge wxredian MP3s into output/audio for deploy
+          import shutil, os
+          if os.path.isdir('output/audio'):
+              os.makedirs('dist/audio', exist_ok=True)
+              for f in os.listdir('output/audio'):
+                  if f.endswith('.mp3'):
+                      shutil.copy2(f'output/audio/{f}', f'dist/audio/{f}')
+                      print(f'Copied audio: {f}')
+          "
+
       - name: Merge articles & build
         run: python scripts/merge_and_build.py
+
+      - name: Copy wxredian MP3s to dist
+        run: |
+          mkdir -p dist/audio
+          if [ -d "output/audio" ]; then
+            cp output/audio/*.mp3 dist/audio/ 2>/dev/null || true
+          fi
 
       - name: Copy static audio files
         run: |
           if [ -d "static-audio" ]; then
             cp static-audio/*.mp3 dist/audio/ 2>/dev/null || true
+          fi
+
+      - name: Copy wxredian state to dist for next run
+        run: |
+          if [ -f "output/wxredian_state.json" ]; then
+            cp output/wxredian_state.json dist/wxredian_state.json
           fi
 
       - name: Deploy to GitHub Pages

@@ -9,3 +9,5 @@ test_*.mp3
 browser_tts_log.txt
 tts_helper_log.txt
 output/
+.gh-pages-deploy/
+.github_token
