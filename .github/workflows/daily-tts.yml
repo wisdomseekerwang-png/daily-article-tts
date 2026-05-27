@@ -28,6 +28,10 @@ jobs:
       - name: Install dependencies
         run: pip install edge-tts httpx
 
+      - name: Fetch articles & generate TTS (刘備教授 only in CI)
+        run: python fetch_articles_tts.py --serverless --output-dir ./output
+        continue-on-error: true
+
       - name: Fetch existing articles from gh-pages
         run: |
           mkdir -p output/data
@@ -36,11 +40,14 @@ jobs:
             2>/dev/null || true
           python scripts/validate_json.py output/data/articles.json 2>/dev/null || echo '[]' > output/data/articles.json
 
-      - name: Fetch articles & generate TTS
-        run: python fetch_articles_tts.py --serverless --output-dir ./output
-
       - name: Merge articles & build
         run: python scripts/merge_and_build.py
+
+      - name: Copy static audio files
+        run: |
+          if [ -d "static-audio" ]; then
+            cp static-audio/*.mp3 dist/audio/ 2>/dev/null || true
+          fi
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
