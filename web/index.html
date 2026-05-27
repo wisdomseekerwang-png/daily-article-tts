@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>早报电台 - 公众号文章语音</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=3">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
 </head>
 <body>
@@ -16,7 +16,7 @@
 
     <header>
         <div class="header-inner">
-            <h1>早报电台</h1>
+            <h1>早报电台 <button id="btn-help" class="btn-help" title="使用说明">?</button></h1>
             <p class="subtitle">猫笔刀 &middot; 刘备教授 &middot; 孥孥的大树 &middot; 卢克文工作室 &middot; 海里的小龙龙 &middot; 远方青木 &middot; 每日语音播报</p>
             <div class="schedule-row">
                 <div class="schedule-times">
@@ -97,6 +97,75 @@
         </section>
     </main>
 
+    <div id="help-modal" class="help-modal" style="display:none">
+        <div class="help-overlay"></div>
+        <div class="help-content">
+            <button id="help-close" class="help-close">&times;</button>
+            <h2>使用说明</h2>
+
+            <div class="help-section">
+                <h3>什么是早报电台？</h3>
+                <p>自动抓取优质公众号文章，生成语音播报。每天自动更新，无需手动操作。</p>
+            </div>
+
+            <div class="help-section">
+                <h3>更新时间</h3>
+                <div class="help-highlight">
+                    <span class="help-badge">自动</span>
+                    每小时自动检查更新（06:00 ~ 23:00 北京时间）
+                </div>
+                <p class="help-note">文章来源发布后，最快 1 小时内生成语音。同一篇文章不会重复生成。</p>
+            </div>
+
+            <div class="help-section">
+                <h3>文章来源</h3>
+                <div class="help-sources">
+                    <span class="source-chip maobidao">猫笔刀</span>
+                    <span class="source-chip liubei">刘备教授</span>
+                    <span class="source-chip nunu">孥孥的大树</span>
+                    <span class="source-chip lukewen">卢克文工作室</span>
+                    <span class="source-chip xiaolonglong">海里的小龙龙</span>
+                    <span class="source-chip yuanfangqingmu">远方青木</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>播放控制</h3>
+                <ul>
+                    <li><strong>单篇播放</strong> — 点击文章卡片上的「播放语音」按钮</li>
+                    <li><strong>连播全部</strong> — 点击顶部「连播」按钮，按顺序播放所有文章</li>
+                    <li><strong>底部播放器</strong> — 播放时出现，支持上一篇/下一篇、进度拖动</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h3>定时播放</h3>
+                <p>设置 3 个定时播放时间，到点自动开始连播。</p>
+                <ul>
+                    <li>勾选 <strong>「定时播放」</strong> 总开关启用</li>
+                    <li>每个时间槽可独立 <strong>启用/禁用</strong>（取消勾选变灰）</li>
+                    <li>分别设置 <strong>小时</strong> 和 <strong>分钟</strong></li>
+                    <li>每个时间槽每天只触发一次，修改时间后可重新触发</li>
+                </ul>
+                <p class="help-note">默认设置：08:00 / 12:00 / 20:00</p>
+            </div>
+
+            <div class="help-section">
+                <h3>通知提醒</h3>
+                <p>点击顶部 <strong>🔔</strong> 按钮开启浏览器通知，到点会收到系统通知提醒。首次开启需授权。</p>
+            </div>
+
+            <div class="help-section">
+                <h3>使用建议</h3>
+                <ul>
+                    <li>建议将页面 <strong>保持在浏览器标签页中</strong>，关闭后定时播放不会生效</li>
+                    <li>如果页面长时间不更新，尝试 <strong>Ctrl+Shift+R</strong> 强制刷新</li>
+                    <li>音频开头会播报「公众号名 + 文章名」，方便识别内容</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
     <div id="player" class="player" style="display:none">
         <div class="player-inner">
             <div class="player-info">
@@ -116,6 +185,6 @@
         </div>
     </div>
 
-    <script src="js/app.js"></script>
+    <script src="js/app.js?v=3"></script>
 </body>
 </html>

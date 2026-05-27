@@ -336,6 +336,18 @@
         document.getElementById('alarm-bar').style.display = 'none';
     });
 
+    // ============== 帮助弹窗 ==============
+    const helpModal = document.getElementById('help-modal');
+    document.getElementById('btn-help').addEventListener('click', () => {
+        helpModal.style.display = 'block';
+    });
+    document.getElementById('help-close').addEventListener('click', () => {
+        helpModal.style.display = 'none';
+    });
+    document.querySelector('.help-overlay').addEventListener('click', () => {
+        helpModal.style.display = 'none';
+    });
+
     // ============== 浏览器通知 ==============
     const requestNotifyPermission = async () => {
         if (!('Notification' in window)) return false;
