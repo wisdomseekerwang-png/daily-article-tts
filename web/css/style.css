@@ -601,6 +601,25 @@ main {
 .source-chip.lukewen { background: var(--lukewen); }
 .source-chip.xiaolonglong { background: var(--xiaolonglong); }
 .source-chip.yuanfangqingmu { background: var(--yuanfangqingmu); }
+.help-gen-row {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 8px 0;
+}
+.help-gen-card {
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+}
+.help-gen-title {
+    margin-bottom: 4px;
+}
+.help-gen-card p {
+    font-size: 12.5px;
+    line-height: 1.6;
+}
 
 /* Responsive */
 @media (max-width: 480px) {

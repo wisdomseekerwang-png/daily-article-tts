@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>早报电台 - 公众号文章语音</title>
-    <link rel="stylesheet" href="css/style.css?v=3">
+    <link rel="stylesheet" href="css/style.css?v=4">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
 </head>
 <body>
@@ -130,6 +130,24 @@
             </div>
 
             <div class="help-section">
+                <h3>生成方式</h3>
+                <p>文章语音通过两种方式自动生成，互为补充：</p>
+                <div class="help-gen-row">
+                    <div class="help-gen-card">
+                        <div class="help-gen-title"><span class="help-badge" style="background:#2d6a4f">本地生成</span></div>
+                        <p>本地电脑每小时运行自动化任务，AI 搜索发现新文章 → 抓取正文 → 生成语音 MP3 → 推送到 GitHub Pages。</p>
+                        <p class="help-note">覆盖全部 6 个公众号。需要本地电脑开机。</p>
+                    </div>
+                    <div class="help-gen-card">
+                        <div class="help-gen-title"><span class="help-badge" style="background:#1982c4">CI 云端生成</span></div>
+                        <p>GitHub Actions 服务器每小时自动运行，直接从网站抓取文章内容 → 生成语音 → 部署到 GitHub Pages。</p>
+                        <p class="help-note">覆盖猫笔刀、刘备教授、孥孥的大树、卢克文工作室、远方青木。无需本地电脑。</p>
+                    </div>
+                </div>
+                <p class="help-note" style="margin-top:8px">两种方式通过文章日期+来源自动去重，不会重复生成同一篇文章。</p>
+            </div>
+
+            <div class="help-section">
                 <h3>播放控制</h3>
                 <ul>
                     <li><strong>单篇播放</strong> — 点击文章卡片上的「播放语音」按钮</li>
@@ -185,6 +203,6 @@
         </div>
     </div>
 
-    <script src="js/app.js?v=3"></script>
+    <script src="js/app.js?v=4"></script>
 </body>
 </html>
