@@ -178,10 +178,18 @@ async def fetch_article_content(url: str) -> str:
     """从归档站抓取文章正文"""
     # 猫笔刀用 maobidao.cn
     if "maobidao" in url:
-        return await fetch_maobidao(url)
+        text = await fetch_maobidao(url)
+        if text and len(text) >= 100:
+            return text
+        # If direct fetch failed, try extracting from RSS
+        log("[INFO] maobidao direct fetch failed, trying RSS content...")
+        return await fetch_maobidao_rss()
     # 刘备教授用 fugay.com
     if "fugay" in url:
         return await fetch_fugay(url)
+    # mp.weixin.qq.com articles
+    if "mp.weixin.qq.com" in url:
+        return await fetch_wechat(url)
     # 否则直接抓取
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -189,6 +197,54 @@ async def fetch_article_content(url: str) -> str:
             return clean_article_text(resp.text)
     except Exception as e:
         log(f"[ERROR] fetch_article_content failed: {e}")
+        return ""
+
+
+async def fetch_maobidao_rss() -> str:
+    """从 RSS feed 提取猫笔刀文章摘要"""
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        ) as client:
+            resp = await client.get("https://maobidao.cn/feed/")
+            xml = resp.text
+            if len(xml) < 5000:
+                return ""
+            item = re.search(r'<item>.*?</item>', xml, re.DOTALL)
+            if not item:
+                return ""
+            # Extract content:encoded or description
+            content_m = re.search(r'<content:encoded[^>]*><!\[CDATA\[(.*?)\]\]></content:encoded>', item.group(0), re.DOTALL)
+            if not content_m:
+                content_m = re.search(r'<description[^>]*><!\[CDATA\[(.*?)\]\]></description>', item.group(0), re.DOTALL)
+            if content_m:
+                raw = content_m.group(1)
+                text = clean_article_text(raw)
+                log(f"[INFO] RSS content extracted: {len(text)} chars")
+                return text
+            return ""
+    except Exception as e:
+        log(f"[WARN] RSS content extraction failed: {e}")
+        return ""
+
+
+async def fetch_wechat(url: str) -> str:
+    """从微信公众号文章提取正文"""
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        ) as client:
+            resp = await client.get(url)
+            html = resp.text
+            paragraphs = re.findall(r'<p[^>]*>(.*?)</p>', html, re.DOTALL)
+            text_parts = []
+            for p in paragraphs:
+                t = clean_article_text(p)
+                if len(t) > 15:
+                    text_parts.append(t)
+            return ' '.join(text_parts) if text_parts else ""
+    except Exception as e:
+        log(f"[WARN] wechat fetch failed: {e}")
         return ""
 
 
@@ -297,41 +353,55 @@ async def text_to_speech(text: str, output_path: str, source_name: str, article_
 
 
 async def get_maobidao_latest() -> dict:
-    """直接解析 maobidao.cn 主页获取最新文章"""
-    for attempt in range(3):
-        try:
-            async with httpx.AsyncClient(
-                timeout=30,
-                follow_redirects=True,
-                verify=True,
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-            ) as client:
-                resp = await client.get("https://maobidao.cn/")
-                html = resp.text
-
-                if len(html) < 10000:
-                    log(f"[WARN] maobidao: 主页内容过小 ({len(html)} bytes), attempt {attempt+1}/3")
-                    await asyncio.sleep(3)
-                    continue
-
-                # Pattern: <a href="https://maobidao.cn/maobidao/...">文章标题</a>
+    """获取猫笔刀最新文章：优先主页 > RSS > 搜狗搜索"""
+    # Strategy 1: Direct homepage parsing
+    try:
+        async with httpx.AsyncClient(
+            timeout=30, follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        ) as client:
+            resp = await client.get("https://maobidao.cn/")
+            html = resp.text
+            if len(html) > 50000:
                 matches = re.findall(r'<a href="(https://maobidao\.cn/maobidao/[^"#]+)"[^>]*>\s*([^<\n]{3,60})\s*</a>', html)
                 for url, title in matches:
                     title = title.strip()
-                    # Skip navigation and meta links
                     if any(kw in title for kw in ["发表评论", "上页", "下页", "目录", "下载", "导航", "搜索", "链接"]):
                         continue
                     if title and len(title) > 4:
-                        log(f"[INFO] maobidao: 找到文章《{title}》")
+                        log(f"[INFO] maobidao: 主页找到文章《{title}》")
                         return {"title": title, "url": url}
-                log(f"[WARN] maobidao: 主页解析未匹配到文章 (found {len(matches)} links, attempt {attempt+1}/3)")
-                await asyncio.sleep(3)
-        except Exception as e:
-            log(f"[ERROR] maobidao attempt {attempt+1}/3: {e}")
-            await asyncio.sleep(3)
+    except Exception as e:
+        log(f"[WARN] maobidao homepage: {e}")
 
-    log("[WARN] maobidao: 所有尝试均失败，使用备用URL")
-    return {}
+    # Strategy 2: RSS feed (works even with Cloudflare)
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        ) as client:
+            resp = await client.get("https://maobidao.cn/feed/")
+            xml = resp.text
+            if len(xml) > 5000:
+                item_match = re.search(r'<item>.*?</item>', xml, re.DOTALL)
+                if item_match:
+                    item = item_match.group(0)
+                    title_m = re.search(r'<title[^>]*><!\[CDATA\[([^\]]+)\]\]></title>', item)
+                    if not title_m:
+                        title_m = re.search(r'<title[^>]*>([^<]+)</title>', item)
+                    link_m = re.search(r'<link[^>]*><!\[CDATA\[([^\]]+)\]\]></link>', item)
+                    if not link_m:
+                        link_m = re.search(r'<link[^>]*>([^<]+)</link>', item)
+                    if title_m and link_m:
+                        title = title_m.group(1).strip()
+                        url = link_m.group(1).strip()
+                        log(f"[INFO] maobidao RSS: 《{title}》")
+                        return {"title": title, "url": url}
+    except Exception as e:
+        log(f"[WARN] maobidao RSS: {e}")
+
+    # Strategy 3: Sogou search
+    log("[INFO] 猫笔刀: 主页和RSS均失败，尝试搜狗搜索...")
+    return await search_sogou_maobidao()
 
 
 async def get_fugay_latest() -> dict:
@@ -370,13 +440,9 @@ async def process_source(source: dict) -> dict:
     
     article_info = {}
     
-    # 猫笔刀：直接解析主页
+    # 猫笔刀：直接解析主页（自动 fallback 到 RSS/搜狗）
     if name == "猫笔刀":
         article_info = await get_maobidao_latest()
-        # If homepage failed (CI environment), try direct sogou search
-        if not article_info:
-            log(f"[INFO] 猫笔刀: 主页失败，尝试搜狗搜索...")
-            article_info = await search_sogou_maobidao()
     # 刘备教授：主页+搜索脚本
     elif name == "刘备教授":
         # 先尝试直接抓取最近文章（最可靠）
