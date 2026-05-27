@@ -1,1 +1,18 @@
-[{"date":"2026-05-27","source":"猫笔刀","title":"房子终于卖出去了","url":"https://maobidao.cn/maobidao/neighbor-sold-house-9-years-unoccupied-loss/","audio":"20260527_maobidao_house_sold.mp3","created_at":"2026-05-27T10:41:55"},{"date":"2026-05-26","source":"刘备教授","title":"给芯片开个挂...","url":"https://www.fugay.com/2026/05/26-lbjs/","audio":"20260527_liubei_chip_hook.mp3","created_at":"2026-05-27T10:41:55"}]
+[
+  {
+    "date": "2026-05-27",
+    "source": "猫笔刀",
+    "title": "房子终于卖出去了",
+    "url": "https://maobidao.cn/maobidao/neighbor-sold-house-9-years-unoccupied-loss/",
+    "audio": "20260527_maobidao_house_sold.mp3",
+    "created_at": "2026-05-27T10:41:55"
+  },
+  {
+    "date": "2026-05-26",
+    "source": "刘备教授",
+    "title": "给芯片开个挂...",
+    "url": "https://www.fugay.com/2026/05/26-lbjs/",
+    "audio": "20260527_liubei_chip_hook.mp3",
+    "created_at": "2026-05-27T10:41:55"
+  }
+]
