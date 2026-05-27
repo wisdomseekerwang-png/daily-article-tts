@@ -3,7 +3,9 @@
 每天定时抓取猫笔刀、刘备教授的最新文章，转为MP3语音
 
 使用方法:
-  python fetch_articles_tts.py
+  python fetch_articles_tts.py              # 本地模式（含WorkBuddy同步）
+  python fetch_articles_tts.py --serverless  # Serverless模式（仅生成文件，不依赖本地路径）
+  python fetch_articles_tts.py --output-dir ./output  # 自定义输出目录
 
 定时任务:
   - 每天上午8点执行，抓取最新文章并生成语音
@@ -19,6 +21,8 @@ import os
 import sys
 import json
 import subprocess
+import shutil
+import argparse
 from datetime import datetime
 
 # ============== 配置区 ==============
@@ -26,17 +30,12 @@ VOICE = "zh-CN-XiaoxiaoNeural"
 VOICE_RATE = "+10%"
 VOICE_PITCH = "+0Hz"
 
+# 本地模式路径
 AUDIO_DIR = r"C:\Users\yuhaoxiong\WorkBuddy\articles_tts"
 LOG_FILE = os.path.join(AUDIO_DIR, "tts_log.txt")
-
-# 工作区目录（用于同步到微信小程序）
 WORKSPACE_DIR = r"C:\Users\yuhaoxiong\WorkBuddy\2026-05-19-task-2"
 NOTIFICATION_FILE = os.path.join(WORKSPACE_DIR, "daily_article_notification.md")
-
-# 文章元数据 JSON（网页应用使用）
 ARTICLES_JSON = os.path.join(WORKSPACE_DIR, "web", "data", "articles.json")
-
-# wechat-article-search 脚本路径
 WECHAT_SEARCH_SCRIPT = r"C:\Users\yuhaoxiong\.workbuddy\skills\wechat-article-search\scripts\search_wechat.js"
 
 # 文章源配置
@@ -44,6 +43,29 @@ SOURCES = [
     {"name": "猫笔刀", "search_query": "猫笔刀"},
     {"name": "刘备教授", "search_query": "刘备教授"},
 ]
+
+# ============== 全局模式 ==============
+SERVERLESS = False
+OUTPUT_DIR = ""
+
+
+def parse_args():
+    """解析命令行参数"""
+    global SERVERLESS, OUTPUT_DIR, AUDIO_DIR, LOG_FILE, WORKSPACE_DIR, NOTIFICATION_FILE, ARTICLES_JSON
+
+    parser = argparse.ArgumentParser(description="微信公众号文章TTS抓取")
+    parser.add_argument("--serverless", action="store_true", help="Serverless模式（CI/CD环境使用）")
+    parser.add_argument("--output-dir", type=str, default="./output", help="Serverless模式输出目录")
+    args = parser.parse_args()
+
+    if args.serverless:
+        SERVERLESS = True
+        OUTPUT_DIR = os.path.abspath(args.output_dir)
+        AUDIO_DIR = os.path.join(OUTPUT_DIR, "audio")
+        LOG_FILE = os.path.join(OUTPUT_DIR, "tts_log.txt")
+        WORKSPACE_DIR = OUTPUT_DIR
+        NOTIFICATION_FILE = os.path.join(OUTPUT_DIR, "daily_article_notification.md")
+        ARTICLES_JSON = os.path.join(OUTPUT_DIR, "articles.json")
 
 
 def log(msg):
@@ -467,49 +489,51 @@ async def send_wechat_notification(summary: str, results: list):
 
 
 async def main():
+    parse_args()
     log("=" * 60)
-    log("公众号文章TTS自动化 开始运行")
-    
+    mode_str = "Serverless" if SERVERLESS else "本地"
+    log(f"公众号文章TTS自动化 开始运行 [{mode_str}模式]")
+
     os.makedirs(AUDIO_DIR, exist_ok=True)
     os.makedirs(WORKSPACE_DIR, exist_ok=True)
     results = []
-    
+
     for source in SOURCES:
         result = await process_source(source)
         results.append(result)
         await asyncio.sleep(5)  # 避免TTS频率限制
-    
+
     # 汇总
     success_count = sum(1 for r in results if r["success"])
     log(f"[SUMMARY] 共处理 {len(results)} 个来源，成功生成 {success_count} 个MP3")
-    
+
     for r in results:
         if r["success"]:
             log(f"  [OK] {r['name']}《{r['title']}》")
         else:
             log(f"  [FAIL] {r['name']}: {r.get('reason', '未知原因')}")
-    
-    # 复制到工作区 & 生成通知
+
     if success_count > 0:
-        for r in results:
-            if r["success"] and r.get("mp3_path"):
-                workspace_path = copy_to_workspace(r["mp3_path"])
-                if workspace_path:
-                    log(f"[INFO] 已同步到工作区: {os.path.basename(workspace_path)}")
-        
-        # 保存文章元数据（网页应用使用）
-        save_articles_json(results)
-        
-        # 创建通知文件
-        summary = create_notification(results)
-        log(f"[INFO] 通知文件已生成: {NOTIFICATION_FILE}")
-        
-        # 尝试微信推送
-        await send_wechat_notification(summary, results)
-        
-        log(f"[INFO] MP3文件目录: {AUDIO_DIR}")
-        log(f"[INFO] 已同步到小程序，请打开 WorkBuddy 小程序查看")
-    
+        # Serverless模式：仅保存 articles.json，不做本地同步
+        if SERVERLESS:
+            save_articles_json(results)
+            log(f"[INFO] Serverless模式: articles.json -> {ARTICLES_JSON}")
+            log(f"[INFO] MP3文件目录: {AUDIO_DIR}")
+        else:
+            # 本地模式：复制到工作区 & 生成通知 & 微信推送
+            for r in results:
+                if r["success"] and r.get("mp3_path"):
+                    workspace_path = copy_to_workspace(r["mp3_path"])
+                    if workspace_path:
+                        log(f"[INFO] 已同步到工作区: {os.path.basename(workspace_path)}")
+
+            save_articles_json(results)
+            summary = create_notification(results)
+            log(f"[INFO] 通知文件已生成: {NOTIFICATION_FILE}")
+            await send_wechat_notification(summary, results)
+            log(f"[INFO] MP3文件目录: {AUDIO_DIR}")
+            log(f"[INFO] 已同步到小程序，请打开 WorkBuddy 小程序查看")
+
     log("=" * 60)
 
 

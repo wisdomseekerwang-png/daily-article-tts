@@ -1,0 +1,62 @@
+name: Daily Article TTS
+
+on:
+  schedule:
+    # UTC 00:00 = HK 08:00
+    - cron: '0 0 * * *'
+  workflow_dispatch:  # 手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          pip install edge-tts httpx
+
+      - name: Fetch articles & generate TTS
+        run: |
+          python fetch_articles_tts.py --serverless --output-dir ./output
+
+      - name: Build web app
+        run: |
+          mkdir -p dist/data dist/audio dist/css dist/js
+          # Copy articles.json
+          cp output/articles.json dist/data/
+          # Copy web assets
+          cp web/index.html dist/
+          cp web/css/style.css dist/css/
+          cp web/js/app.js dist/js/
+          # Copy new MP3 files
+          if [ -d "output/audio" ]; then
+            cp output/audio/*.mp3 dist/audio/ 2>/dev/null || true
+          fi
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          keep_files: true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-articles-${{ github.run_number }}
+          path: output/
+          retention-days: 7
