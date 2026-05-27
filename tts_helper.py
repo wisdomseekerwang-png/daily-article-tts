@@ -143,8 +143,10 @@ async def generate_tts(text, title, source):
     output_path = os.path.join(AUDIO_DIR, filename)
 
     try:
+        # Build SSML: source name + 1s pause + article title + 1s pause + content
+        tts_text = f"<speak>{source}。<break time='1000ms'/>{title}。<break time='1000ms'/>{text}</speak>"
         communicate = edge_tts.Communicate(
-            text, voice=VOICE, rate=VOICE_RATE, pitch=VOICE_PITCH
+            tts_text, voice=VOICE, rate=VOICE_RATE, pitch=VOICE_PITCH
         )
         await communicate.save(output_path)
         file_size = os.path.getsize(output_path)

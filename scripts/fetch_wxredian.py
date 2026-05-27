@@ -109,11 +109,14 @@ def truncate_for_tts(text: str) -> str:
     return t + "\u2026\u2026"
 
 
-async def generate_tts(text: str, output_path: str) -> bool:
+async def generate_tts(text: str, output_path: str, source_name: str = "", title: str = "") -> bool:
     if not text or len(text) < 100:
         return False
+    text = truncate_for_tts(text)
+    # Build SSML: source name + 1s pause + article title + 1s pause + content
+    tts_text = f"<speak>{source_name}。<break time='1000ms'/>{title}。<break time='1000ms'/>{text}</speak>"
     try:
-        comm = edge_tts.Communicate(truncate_for_tts(text), voice=VOICE, rate=VOICE_RATE, pitch=VOICE_PITCH)
+        comm = edge_tts.Communicate(tts_text, voice=VOICE, rate=VOICE_RATE, pitch=VOICE_PITCH)
         await comm.save(output_path)
         kb = os.path.getsize(output_path) // 1024
         log(f"  TTS: {os.path.basename(output_path)} ({kb}KB)")
@@ -237,7 +240,7 @@ async def main():
                     mp3_name = f"{today}_{author_name}_{safe_title}.mp3"
                     mp3_path = str(audio_dir / mp3_name)
 
-                    tts_ok = await generate_tts(content, mp3_path)
+                    tts_ok = await generate_tts(content, mp3_path, author_name, atitle)
 
                     article_entry = {
                         "date": adate,

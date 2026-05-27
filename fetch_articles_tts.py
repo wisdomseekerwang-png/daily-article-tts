@@ -420,12 +420,15 @@ async def text_to_speech(text: str, output_path: str, source_name: str, article_
     if not text or len(text) < 50:
         log(f"[WARN] {source_name} - {article_title}: 文章内容过短，跳过TTS")
         return False
-    
+
     text = truncate_for_tts(text)
-    
+
+    # Build SSML: source name + 1s pause + article title + 1s pause + content
+    tts_text = f"<speak>{source_name}。<break time='1000ms'/>{article_title}。<break time='1000ms'/>{text}</speak>"
+
     try:
         communicate = edge_tts.Communicate(
-            text,
+            tts_text,
             voice=VOICE,
             rate=VOICE_RATE,
             pitch=VOICE_PITCH,
