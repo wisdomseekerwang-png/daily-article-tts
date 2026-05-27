@@ -32,6 +32,10 @@
     const sourceClass = (name) => {
         if (name.includes('猫笔刀')) return 'maobidao';
         if (name.includes('刘备')) return 'liubei';
+        if (name.includes('孥孥')) return 'nunu';
+        if (name.includes('卢克文')) return 'lukewen';
+        if (name.includes('小龙龙')) return 'xiaolonglong';
+        if (name.includes('远方青木')) return 'yuanfangqingmu';
         return '';
     };
 

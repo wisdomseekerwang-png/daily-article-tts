@@ -7,6 +7,10 @@
     --accent: #007aff;
     --maobidao: #e85d04;
     --liubei: #2d6a4f;
+    --nunu: #6a4c93;
+    --lukewen: #1982c4;
+    --xiaolonglong: #0096c7;
+    --yuanfangqingmu: #386641;
     --today-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     --shadow: 0 2px 12px rgba(0,0,0,0.08);
     --radius: 12px;
@@ -92,6 +96,10 @@ main {
 }
 .card-today .source-tag.maobidao { background: var(--maobidao); }
 .card-today .source-tag.liubei { background: var(--liubei); }
+.card-today .source-tag.nunu { background: var(--nunu); }
+.card-today .source-tag.lukewen { background: var(--lukewen); }
+.card-today .source-tag.xiaolonglong { background: var(--xiaolonglong); }
+.card-today .source-tag.yuanfangqingmu { background: var(--yuanfangqingmu); }
 .card-today .card-date { font-size: 12px; color: var(--text-secondary); }
 .card-today .card-title {
     font-size: 16px;
@@ -189,6 +197,10 @@ main {
 }
 .source-dot.maobidao { background: var(--maobidao); }
 .source-dot.liubei { background: var(--liubei); }
+.source-dot.nunu { background: var(--nunu); }
+.source-dot.lukewen { background: var(--lukewen); }
+.source-dot.xiaolonglong { background: var(--xiaolonglong); }
+.source-dot.yuanfangqingmu { background: var(--yuanfangqingmu); }
 
 .loading {
     text-align: center;
@@ -232,6 +244,10 @@ main {
 }
 .player-source.maobidao { background: var(--maobidao); }
 .player-source.liubei { background: var(--liubei); }
+.player-source.nunu { background: var(--nunu); }
+.player-source.lukewen { background: var(--lukewen); }
+.player-source.xiaolonglong { background: var(--xiaolonglong); }
+.player-source.yuanfangqingmu { background: var(--yuanfangqingmu); }
 .player-title {
     font-size: 13px;
     font-weight: 500;

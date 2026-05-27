@@ -1,6 +1,6 @@
 """
 微信公众号文章TTS语音合成自动化脚本
-每天定时抓取猫笔刀、刘备教授的最新文章，转为MP3语音
+每天定时抓取多个公众号的最新文章，转为MP3语音
 
 使用方法:
   python fetch_articles_tts.py              # 本地模式（含WorkBuddy同步）
@@ -42,6 +42,10 @@ WECHAT_SEARCH_SCRIPT = r"C:\Users\yuhaoxiong\.workbuddy\skills\wechat-article-se
 SOURCES = [
     {"name": "猫笔刀", "search_query": "猫笔刀"},
     {"name": "刘备教授", "search_query": "刘备教授"},
+    {"name": "孥孥的大树", "search_query": "孥孥的大树"},
+    {"name": "卢克文工作室", "search_query": "卢克文工作室"},
+    {"name": "海里的小龙龙", "search_query": "海里的小龙龙"},
+    {"name": "远方青木", "search_query": "远方青木"},
 ]
 
 # ============== 全局模式 ==============
@@ -105,45 +109,99 @@ async def search_sogou_maobidao() -> dict:
 
 
 async def search_latest_article(name: str, query: str) -> dict:
-    """通过 wechat-article-search 脚本搜索最新文章（仅用于刘备教授，因为fugay是动态渲染）"""
+    """通过搜狗微信搜索获取公众号最新文章（纯 Python httpx 实现）"""
+    # Strategy 1: Sogou WeChat search (type=2 for account-matched articles)
     try:
-        skill_dir = os.path.dirname(WECHAT_SEARCH_SCRIPT)
-        result = subprocess.run(
-            [sys.executable, "-c",
-             f"import subprocess, sys; r = subprocess.run(['node', r'{WECHAT_SEARCH_SCRIPT}', '{query}', '-n', '5'], "
-             f"capture_output=True, text=True, cwd=r'{skill_dir}'); print(r.stdout[:5000])"],
-            capture_output=True, text=True, timeout=60
-        )
-        output = result.stdout
-        json_start = output.find('{')
-        json_end = output.rfind('}') + 1
-        if json_start >= 0 and json_end > json_start:
-            data = json.loads(output[json_start:json_end])
-            articles = data.get("articles", [])
-            # Filter to only articles from the correct official account source
-            if articles:
-                for a in articles:
-                    src = a.get("source", "")
-                    # 刘备教授官方来源
-                    if name == "刘备教授" and ("刘备教授" in src or "刘备" in src):
-                        return {"title": a.get("title",""), "url": a.get("url",""),
-                                "datetime": a.get("datetime",""), "source": src}
-                    # 猫笔刀官方来源
-                    if name == "猫笔刀" and ("猫笔刀" in src or "猫笔" in src or "招财大牛猫" in src):
-                        return {"title": a.get("title",""), "url": a.get("url",""),
-                                "datetime": a.get("datetime",""), "source": src}
-                # Fallback: return first article if filter fails
-                first = articles[0]
-                return {"title": first.get("title",""), "url": first.get("url",""),
-                        "datetime": first.get("datetime",""), "source": first.get("source","")}
-        log(f"[WARN] {name}: 搜索未返回文章数据")
-        return {}
-    except subprocess.TimeoutExpired:
-        log(f"[ERROR] {name}: 搜索超时")
-        return {}
+        async with httpx.AsyncClient(
+            timeout=15, follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        ) as client:
+            resp = await client.get("https://weixin.sogou.com/weixin",
+                params={"type": "2", "query": query, "ie": "utf8"})
+            html = resp.text
+
+            if len(html) < 5000:
+                log(f"[WARN] {name}: Sogou返回页面过小({len(html)}), 可能被拦截")
+            else:
+                # Parse article results from the page
+                # The page uses <ul class="news-list"><li> structure
+                articles = []
+                items = re.findall(r'<div[^>]*class="[^"]*txt-box[^"]*"[^>]*>(.*?)</div>\s*<!--\s*\.txt-box', html, re.DOTALL)
+                if not items:
+                    # Fallback: find all <li> with title links inside news-list
+                    news_section = re.search(r'<ul[^>]*class="[^"]*news-list[^"]*"[^>]*>(.*?)</ul>', html, re.DOTALL)
+                    if news_section:
+                        items = re.findall(r'<li[^>]*>(.*?)</li>', news_section.group(1), re.DOTALL)
+
+                for item in items:
+                    # Extract title and URL
+                    title_m = re.search(r'<h3[^>]*>.*?<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>.*?</h3>', item, re.DOTALL)
+                    if not title_m:
+                        continue
+                    url = title_m.group(1)
+                    title = re.sub(r'<[^>]+>', '', title_m.group(2)).strip()
+
+                    # Extract source name
+                    src = ""
+                    src_m = re.search(r'(?:class="[^"]*(?:all-time-y2|account)[^"]*"[^>]*>|<a[^>]+class="[^"]*account[^"]*"[^>]*>)([^<]+)', item)
+                    if src_m:
+                        src = src_m.group(1).strip()
+
+                    # Extract date info (from script timestamp)
+                    date_info = ""
+                    ts_m = re.search(r'script.*?(\d{10})', item)
+                    if ts_m:
+                        import time
+                        ts = int(ts_m.group(1))
+                        try:
+                            days_ago = (int(time.time()) - ts) // 86400
+                            date_info = f"{days_ago}d"
+                        except:
+                            pass
+
+                    articles.append({
+                        "title": title, "url": url, "source": src, "date_info": date_info
+                    })
+
+                if articles:
+                    # Filter: source must contain account name or its first 2 chars
+                    matched = [a for a in articles if any(kw in a["source"] for kw in [name, name[:2]])]
+                    if matched:
+                        # Sort by date (lower date_info number = newer)
+                        matched.sort(key=lambda x: int(re.search(r'(\d+)', x["date_info"]).group(1)) if re.search(r'(\d+)', x["date_info"]) else 9999)
+                        best = matched[0]
+                        # Fix relative URLs (sogou returns /link?url=... instead of full URL)
+                        url = best["url"]
+                        if url.startswith("/"):
+                            url = "https://weixin.sogou.com" + url
+                        log(f"[INFO] {name}: 搜到《{best['title'][:30]}》({best.get('date_info','')})")
+                        return {"title": best["title"], "url": url, "source": best["source"]}
+                    else:
+                        log(f"[WARN] {name}: 找到{len(articles)}篇文章但无来源匹配")
     except Exception as e:
-        log(f"[ERROR] {name}: 搜索失败 - {e}")
-        return {}
+        log(f"[WARN] {name}: Sogou搜索失败 - {e}")
+
+    # Strategy 2: Bing search (fallback)
+    try:
+        bing_query = f"\"{query}\" 公众号 最新文章"
+        async with httpx.AsyncClient(
+            timeout=15, follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        ) as client:
+            resp = await client.get("https://www.bing.com/search", params={"q": bing_query, "count": "10"})
+            html = resp.text
+            # Extract any mp.weixin.qq.com links from Bing results
+            results = re.findall(r'<a[^>]+href="(https://mp\.weixin\.qq\.com/s[^"]*)"[^>]*>(.*?)</a>', html, re.DOTALL)
+            for url, title in results:
+                title = re.sub(r'<[^>]+>', '', title).strip()
+                if title and len(title) > 5:
+                    log(f"[INFO] {name}: Bing找到《{title[:30]}》")
+                    return {"title": title, "url": url, "source": name}
+    except Exception as e:
+        log(f"[WARN] {name}: Bing搜索失败 - {e}")
+
+    log(f"[WARN] {name}: 所有搜索方式均未找到文章")
+    return {}
 
 
 def clean_article_text(text: str) -> str:
@@ -175,7 +233,7 @@ def truncate_for_tts(text: str, max_chars: int = 3500) -> str:
 
 
 async def fetch_article_content(url: str) -> str:
-    """从归档站抓取文章正文"""
+    """从归档站或微信抓取文章正文"""
     # 猫笔刀用 maobidao.cn
     if "maobidao" in url:
         text = await fetch_maobidao(url)
@@ -187,6 +245,37 @@ async def fetch_article_content(url: str) -> str:
     # 刘备教授用 fugay.com
     if "fugay" in url:
         return await fetch_fugay(url)
+    # Sogou redirect URL — follow redirect to get actual mp.weixin.qq.com URL
+    if "weixin.sogou.com" in url:
+        log("[INFO] Following sogou redirect...")
+        try:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=False,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            ) as client:
+                resp = await client.get(url)
+                # Check if redirected to anti-spider page
+                if resp.status_code in (301, 302):
+                    location = resp.headers.get("location", "")
+                    if "antispider" in location:
+                        log("[WARN] Sogou anti-spider triggered, cannot resolve URL")
+                        return ""
+                # If 200, check for JavaScript URL construction
+                html = resp.text
+                url_parts = re.findall(r"url\s*\+=\s*['\"]([^'\"]+)['\"]", html)
+                if url_parts:
+                    real_url = ''.join(url_parts)
+                    if "mp.weixin.qq.com" in real_url:
+                        log(f"[INFO] Extracted URL from JS redirect")
+                        return await fetch_wechat(real_url)
+                # Check if we got the actual WeChat article
+                final_url = str(resp.url)
+                if "mp.weixin.qq.com" in final_url and len(html) > 5000:
+                    log(f"[INFO] Redirected to WeChat article")
+                    return await fetch_wechat(final_url)
+                log("[WARN] Sogou redirect did not resolve to article")
+        except Exception as e:
+            log(f"[WARN] Sogou redirect failed: {e}")
+        return ""
     # mp.weixin.qq.com articles
     if "mp.weixin.qq.com" in url:
         return await fetch_wechat(url)
@@ -448,7 +537,12 @@ async def process_source(source: dict) -> dict:
         # 先尝试直接抓取最近文章（最可靠）
         article_info = await get_fugay_latest()
         log(f"[INFO] {name}: 从存档找到《{article_info.get('title','')}》")
-        # 搜索脚本结果暂时不用（返回旧文章）
+    else:
+        # 其他公众号：通过搜狗搜索获取最新文章
+        log(f"[INFO] {name}: 通过搜狗微信搜索...")
+        article_info = await search_latest_article(name, source["search_query"])
+        if article_info:
+            log(f"[INFO] {name}: 搜索到《{article_info.get('title','')}》")
     
     if not article_info or not article_info.get("url"):
         # 备用已知URL
