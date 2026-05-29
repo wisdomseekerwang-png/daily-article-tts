@@ -689,6 +689,7 @@ def sync_articles_to_ghpages():
                 deduped.append(a)
         existing = deduped
         existing_keys = {(a["date"], a["source"]) for a in existing}
+        existing_urls = {a["url"] for a in existing if a.get("url")}
 
         # 读取 web 新数据
         with open(src, "r", encoding="utf-8") as f:
@@ -697,9 +698,15 @@ def sync_articles_to_ghpages():
         added = 0
         for a in new_articles:
             key = (a["date"], a["source"])
-            if key not in existing_keys:
-                existing.append(a)
-                added += 1
+            if key in existing_keys:
+                continue
+            if a.get("url") and a["url"] in existing_urls:
+                continue
+            existing.append(a)
+            existing_keys.add(key)
+            if a.get("url"):
+                existing_urls.add(a["url"])
+            added += 1
 
         if added > 0:
             existing.sort(key=lambda x: x["date"], reverse=True)
@@ -859,19 +866,26 @@ def save_articles_json(results: list):
                 deduped_existing.append(a)
         existing = deduped_existing
 
-        # 用 set 去重（按日期+来源）
+        # 用 set 去重（按日期+来源+URL）
+        today_str = datetime.now().strftime("%Y-%m-%d")
         existing_keys = {(a["date"], a["source"]) for a in existing}
+        existing_urls = {a["url"] for a in existing if a.get("url")}
         
         for r in results:
             if not r["success"]:
                 continue
-            key = (r["date"], r["name"])
+            # 规范化日期后再查重（避免空日期导致重复）
+            article_date = r["date"] or today_str
+            key = (article_date, r["name"])
             if key in existing_keys:
                 continue  # 已存在，跳过
+            # URL 级别去重：同一篇文章不同日期也跳过
+            if r.get("url") and r["url"] in existing_urls:
+                log(f"[SKIP] {r['name']}: URL 已存在 -> {r['url'][:60]}")
+                continue
             
-            today_str = datetime.now().strftime("%Y-%m-%d")
             article = {
-                "date": r["date"] or today_str,
+                "date": article_date,
                 "source": r["name"],
                 "title": r["title"],
                 "url": r["url"],
@@ -881,6 +895,9 @@ def save_articles_json(results: list):
             if r.get("publish_time"):
                 article["publish_time"] = r["publish_time"]
             existing.append(article)
+            existing_keys.add(key)
+            if r.get("url"):
+                existing_urls.add(r["url"])
         
         # 按日期倒序
         existing.sort(key=lambda x: x["date"], reverse=True)
