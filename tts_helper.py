@@ -15,18 +15,67 @@ import sys
 import json
 import re
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # ============== 配置区 ==============
 WORKSPACE_DIR = r"C:\Users\yuhaoxiong\WorkBuddy\2026-05-19-task-2"
 AUDIO_DIR = os.path.join(WORKSPACE_DIR, "audio")
 ARTICLES_JSON = os.path.join(WORKSPACE_DIR, "web", "data", "articles.json")
+RUN_LOG_JSON = os.path.join(WORKSPACE_DIR, "web", "data", "tts_run_log.json")
 LOG_FILE = os.path.join(WORKSPACE_DIR, "tts_helper_log.txt")
 
 VOICE = "zh-CN-XiaoxiaoNeural"
 VOICE_RATE = "+10%"
 VOICE_PITCH = "+0Hz"
 MAX_TTS_CHARS = 3500
+
+
+def trim_log():
+    """只保留最近3天的日志"""
+    try:
+        if not os.path.exists(LOG_FILE):
+            return
+        cutoff = datetime.now() - timedelta(days=3)
+        cutoff_str = cutoff.strftime("%Y-%m-%d")
+        with open(LOG_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        kept = [l for l in lines if not l.startswith("[") or l[1:11] >= cutoff_str]
+        with open(LOG_FILE, "w", encoding="utf-8") as f:
+            f.writelines(kept)
+    except Exception:
+        pass
+
+
+def append_run_log(source, title, audio, status="ok", mode="AI自动化", reason=""):
+    """追加一条结构化运行日志到 tts_run_log.json"""
+    try:
+        os.makedirs(os.path.dirname(RUN_LOG_JSON), exist_ok=True)
+        existing = []
+        if os.path.exists(RUN_LOG_JSON):
+            with open(RUN_LOG_JSON, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        entry = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "source": source,
+            "title": title,
+            "audio": audio,
+            "status": status,
+            "mode": mode,
+        }
+        if reason:
+            entry["reason"] = reason
+        # 去重
+        existing_keys = {(e.get("timestamp", ""), e.get("source", "")) for e in existing}
+        key = (entry["timestamp"], entry["source"])
+        if key not in existing_keys:
+            existing.append(entry)
+        existing.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        existing = existing[:500]
+        with open(RUN_LOG_JSON, "w", encoding="utf-8") as f:
+            json.dump(existing, f, ensure_ascii=False, indent=2)
+        log(f"[INFO] 运行日志已记录: {source} - {title[:20]}")
+    except Exception as e:
+        log(f"[WARN] 写入运行日志失败: {e}")
 
 
 def log(msg):
@@ -94,6 +143,16 @@ def save_article_to_json(title, source, url, mp3_filename, article_date=None, pu
         if os.path.exists(ARTICLES_JSON):
             with open(ARTICLES_JSON, "r", encoding="utf-8") as f:
                 existing = json.load(f)
+
+        # 预去重：清理 existing 中可能存在的重复
+        seen_pre = set()
+        deduped = []
+        for a in existing:
+            key = (a.get("date", ""), a.get("source", ""))
+            if key not in seen_pre:
+                seen_pre.add(key)
+                deduped.append(a)
+        existing = deduped
 
         # Dedup by (date, source)
         today = article_date or datetime.now().strftime("%Y-%m-%d")
@@ -172,6 +231,7 @@ def parse_args():
 
 
 async def main():
+    trim_log()
     args = parse_args()
 
     # Check mode: just check if today's article exists (don't require title/source)
@@ -220,16 +280,19 @@ async def main():
     exists, _ = check_source_today(args.source)
     if exists:
         log(f"[SKIP] {args.source} already processed today")
+        append_run_log(args.source, "已跳过(今日已存在)", "", "skip", "AI自动化", "今日已有该来源文章")
         return
 
     # Generate TTS
     mp3_filename = await generate_tts(text, args.title, args.source)
     if not mp3_filename:
         log(f"[FAIL] TTS generation failed for {args.source}")
+        append_run_log(args.source, args.title, "", "fail", "AI自动化", "TTS生成失败")
         return
 
     # Update articles.json
     save_article_to_json(args.title, args.source, args.url or "", mp3_filename, args.date or None, args.publish_time or None)
+    append_run_log(args.source, args.title, mp3_filename, "ok", "AI自动化")
     log(f"[DONE] {args.source} processing complete")
 
 

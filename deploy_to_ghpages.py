@@ -101,21 +101,64 @@ def main():
             remote_file.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(local_file, remote_file)
             run_git(["git", "add", asset], cwd=TEMP_CLONE_DIR)
-            print(f"  Synced: {asset}")
+            result = run_git(["git", "diff", "--cached", "--quiet", asset], cwd=TEMP_CLONE_DIR, check=False)
+            if result.returncode != 0:
+                changes = True
+                print(f"  Updated: {asset}")
+            else:
+                run_git(["git", "reset", "HEAD", asset], cwd=TEMP_CLONE_DIR)
+                print(f"  No changes: {asset}")
 
-    # Step 3: Copy articles.json
+    # Step 3: Merge articles.json (not overwrite)
     local_articles = LOCAL_DATA_DIR / "articles.json"
     remote_articles = REMOTE_DATA_DIR / "articles.json"
     changes = False
 
     if local_articles.exists():
         REMOTE_DATA_DIR.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(local_articles, remote_articles)
+        # Read local
+        with open(local_articles, "r", encoding="utf-8") as f:
+            local_entries = json.load(f)
+        # Pre-dedup local
+        seen_local = set()
+        deduped_local = []
+        for a in local_entries:
+            key = (a.get("date", ""), a.get("source", ""))
+            if key not in seen_local:
+                seen_local.add(key)
+                deduped_local.append(a)
+        local_entries = deduped_local
+        # Read remote (if exists) and merge
+        remote_entries = []
+        if remote_articles.exists():
+            with open(remote_articles, "r", encoding="utf-8") as f:
+                remote_entries = json.load(f)
+            # Pre-dedup remote
+            seen_remote = set()
+            deduped_remote = []
+            for a in remote_entries:
+                key = (a.get("date", ""), a.get("source", ""))
+                if key not in seen_remote:
+                    seen_remote.add(key)
+                    deduped_remote.append(a)
+            remote_entries = deduped_remote
+        # Merge: add local entries not in remote
+        remote_keys = {(a.get("date", ""), a.get("source", "")) for a in remote_entries}
+        added = 0
+        for a in local_entries:
+            key = (a.get("date", ""), a.get("source", ""))
+            if key not in remote_keys:
+                remote_entries.append(a)
+                added += 1
+        # Always write deduped merged result
+        remote_entries.sort(key=lambda x: x.get("date", ""), reverse=True)
+        with open(remote_articles, "w", encoding="utf-8") as f:
+            json.dump(remote_entries, f, ensure_ascii=False, indent=2)
         run_git(["git", "add", "data/articles.json"], cwd=TEMP_CLONE_DIR)
         result = run_git(["git", "diff", "--cached", "--quiet"], cwd=TEMP_CLONE_DIR, check=False)
         if result.returncode != 0:
             changes = True
-            print("  Updated: data/articles.json")
+            print(f"  Merged articles.json: {added} new entries (total {len(remote_entries)})")
         else:
             run_git(["git", "reset", "HEAD", "data/articles.json"], cwd=TEMP_CLONE_DIR)
             print("  No changes: data/articles.json")
@@ -138,6 +181,37 @@ def main():
             print("  No new audio files")
     else:
         print("  Skip: no local audio/ directory")
+
+    # Step 4: Merge tts_run_log.json
+    local_log = LOCAL_DATA_DIR / "tts_run_log.json"
+    remote_log = REMOTE_DATA_DIR / "tts_run_log.json"
+    if local_log.exists():
+        REMOTE_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        remote_entries = []
+        if remote_log.exists():
+            with open(remote_log, "r", encoding="utf-8") as f:
+                remote_entries = json.load(f)
+        with open(local_log, "r", encoding="utf-8") as f:
+            local_entries = json.load(f)
+        remote_keys = {(e.get("timestamp", ""), e.get("source", "")) for e in remote_entries}
+        added = 0
+        for entry in local_entries:
+            key = (entry.get("timestamp", ""), entry.get("source", ""))
+            if key not in remote_keys:
+                remote_entries.append(entry)
+                added += 1
+        if added > 0:
+            remote_entries.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+            remote_entries = remote_entries[:500]
+            with open(remote_log, "w", encoding="utf-8") as f:
+                json.dump(remote_entries, f, ensure_ascii=False, indent=2)
+            run_git(["git", "add", "data/tts_run_log.json"], cwd=TEMP_CLONE_DIR)
+            changes = True
+            print(f"  Merged run log: {added} new entries")
+        else:
+            print("  No new run log entries")
+    else:
+        print("  Skip: tts_run_log.json not found locally")
 
     # Step 4: Commit and push
     if not changes:

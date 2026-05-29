@@ -23,7 +23,7 @@ import json
 import subprocess
 import shutil
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # ============== 配置区 ==============
 VOICE = "zh-CN-XiaoxiaoNeural"
@@ -70,6 +70,22 @@ def parse_args():
         WORKSPACE_DIR = OUTPUT_DIR
         NOTIFICATION_FILE = os.path.join(OUTPUT_DIR, "daily_article_notification.md")
         ARTICLES_JSON = os.path.join(OUTPUT_DIR, "articles.json")
+
+
+def trim_log():
+    """只保留最近3天的日志"""
+    try:
+        if not os.path.exists(LOG_FILE):
+            return
+        cutoff = datetime.now() - timedelta(days=3)
+        cutoff_str = cutoff.strftime("%Y-%m-%d")
+        with open(LOG_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        kept = [l for l in lines if not l.startswith("[") or l[1:11] >= cutoff_str]
+        with open(LOG_FILE, "w", encoding="utf-8") as f:
+            f.writelines(kept)
+    except Exception:
+        pass
 
 
 def log(msg):
@@ -632,6 +648,161 @@ def copy_to_workspace(mp3_path: str) -> str:
         return None
 
 
+def copy_to_ghpages(mp3_path: str) -> str:
+    """复制MP3到 .gh-pages-deploy/audio/，以便推送到 GitHub Pages"""
+    if not mp3_path or not os.path.exists(mp3_path):
+        return None
+    try:
+        ghpages_audio = os.path.join(WORKSPACE_DIR, ".gh-pages-deploy", "audio")
+        os.makedirs(ghpages_audio, exist_ok=True)
+        filename = os.path.basename(mp3_path)
+        dest = os.path.join(ghpages_audio, filename)
+        import shutil
+        shutil.copy2(mp3_path, dest)
+        return dest
+    except Exception as e:
+        log(f"[WARN] 复制到gh-pages失败: {e}")
+        return None
+
+
+def sync_articles_to_ghpages():
+    """将 web/data/articles.json 合并到 .gh-pages-deploy/data/articles.json"""
+    try:
+        src = os.path.join(WORKSPACE_DIR, "web", "data", "articles.json")
+        dst = os.path.join(WORKSPACE_DIR, ".gh-pages-deploy", "data", "articles.json")
+        if not os.path.exists(src):
+            log("[WARN] web/data/articles.json 不存在，跳过同步")
+            return False
+
+        # 读取 gh-pages 已有数据
+        existing = []
+        if os.path.exists(dst):
+            with open(dst, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        # 预去重：清理 gh-pages 中可能存在的重复
+        seen_pre = set()
+        deduped = []
+        for a in existing:
+            key = (a.get("date", ""), a.get("source", ""))
+            if key not in seen_pre:
+                seen_pre.add(key)
+                deduped.append(a)
+        existing = deduped
+        existing_keys = {(a["date"], a["source"]) for a in existing}
+
+        # 读取 web 新数据
+        with open(src, "r", encoding="utf-8") as f:
+            new_articles = json.load(f)
+
+        added = 0
+        for a in new_articles:
+            key = (a["date"], a["source"])
+            if key not in existing_keys:
+                existing.append(a)
+                added += 1
+
+        if added > 0:
+            existing.sort(key=lambda x: x["date"], reverse=True)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(dst, "w", encoding="utf-8") as f:
+                json.dump(existing, f, ensure_ascii=False, indent=2)
+            log(f"[INFO] gh-pages articles.json 新增 {added} 条记录")
+            return True
+        else:
+            log("[INFO] gh-pages articles.json 无新记录，跳过")
+            return False
+    except Exception as e:
+        log(f"[WARN] 同步articles.json到gh-pages失败: {e}")
+        return False
+
+
+def git_push_ghpages():
+    """git add + commit + push .gh-pages-deploy/ 到 gh-pages 分支"""
+    try:
+        ghpages_dir = os.path.join(WORKSPACE_DIR, ".gh-pages-deploy")
+        if not os.path.isdir(os.path.join(ghpages_dir, ".git")):
+            log("[WARN] .gh-pages-deploy 不是git仓库，跳过推送")
+            return
+
+        subprocess.run(["git", "add", "-A"], cwd=ghpages_dir, capture_output=True, text=True)
+        # 检查是否有变更
+        result = subprocess.run(["git", "status", "--porcelain"], cwd=ghpages_dir, capture_output=True, text=True)
+        if not result.stdout.strip():
+            log("[INFO] gh-pages 无文件变更，跳过推送")
+            return
+
+        subprocess.run(
+            ["git", "commit", "-m", f"auto update: TTS audio + articles ({datetime.now().strftime('%Y-%m-%d %H:%M')})"],
+            cwd=ghpages_dir, capture_output=True, text=True
+        )
+        subprocess.run(["git", "push", "origin", "gh-pages"], cwd=ghpages_dir, capture_output=True, text=True)
+        log("[OK] 已推送到 GitHub Pages")
+    except Exception as e:
+        log(f"[WARN] git push gh-pages 失败: {e}")
+
+
+# ============== 运行日志 (JSON) ==============
+RUN_LOG_JSON = os.path.join(WORKSPACE_DIR, "web", "data", "tts_run_log.json")
+
+
+def append_run_log(entries: list):
+    """追加结构化运行日志到 web/data/tts_run_log.json"""
+    try:
+        os.makedirs(os.path.dirname(RUN_LOG_JSON), exist_ok=True)
+        existing = []
+        if os.path.exists(RUN_LOG_JSON):
+            with open(RUN_LOG_JSON, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        # 去重: 按 timestamp+source
+        existing_keys = {(e.get("timestamp", ""), e.get("source", "")) for e in existing}
+        added = 0
+        for entry in entries:
+            key = (entry.get("timestamp", ""), entry.get("source", ""))
+            if key not in existing_keys:
+                existing.append(entry)
+                added += 1
+        # 按时间倒序，最多保留500条
+        existing.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        existing = existing[:500]
+        with open(RUN_LOG_JSON, "w", encoding="utf-8") as f:
+            json.dump(existing, f, ensure_ascii=False, indent=2)
+        if added > 0:
+            log(f"[INFO] 运行日志新增 {added} 条记录")
+    except Exception as e:
+        log(f"[WARN] 写入运行日志失败: {e}")
+
+
+def sync_run_log_to_ghpages():
+    """合并运行日志到 .gh-pages-deploy/data/tts_run_log.json"""
+    try:
+        src = RUN_LOG_JSON
+        dst = os.path.join(WORKSPACE_DIR, ".gh-pages-deploy", "data", "tts_run_log.json")
+        if not os.path.exists(src):
+            return
+        gh_existing = []
+        if os.path.exists(dst):
+            with open(dst, "r", encoding="utf-8") as f:
+                gh_existing = json.load(f)
+        with open(src, "r", encoding="utf-8") as f:
+            local_entries = json.load(f)
+        gh_keys = {(e.get("timestamp", ""), e.get("source", "")) for e in gh_existing}
+        added = 0
+        for entry in local_entries:
+            key = (entry.get("timestamp", ""), entry.get("source", ""))
+            if key not in gh_keys:
+                gh_existing.append(entry)
+                added += 1
+        if added > 0:
+            gh_existing.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+            gh_existing = gh_existing[:500]
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(dst, "w", encoding="utf-8") as f:
+                json.dump(gh_existing, f, ensure_ascii=False, indent=2)
+            log(f"[INFO] gh-pages 运行日志合并 {added} 条")
+    except Exception as e:
+        log(f"[WARN] 同步运行日志到gh-pages失败: {e}")
+
+
 def create_notification(results: list) -> str:
     """生成微信通知摘要文件"""
     today = datetime.now().strftime("%Y年%m月%d日")
@@ -677,7 +848,17 @@ def save_articles_json(results: list):
         if os.path.exists(ARTICLES_JSON):
             with open(ARTICLES_JSON, "r", encoding="utf-8") as f:
                 existing = json.load(f)
-        
+
+        # 预去重：先清理 existing 中可能存在的重复（按日期+来源）
+        seen_keys = set()
+        deduped_existing = []
+        for a in existing:
+            key = (a.get("date", ""), a.get("source", ""))
+            if key not in seen_keys:
+                seen_keys.add(key)
+                deduped_existing.append(a)
+        existing = deduped_existing
+
         # 用 set 去重（按日期+来源）
         existing_keys = {(a["date"], a["source"]) for a in existing}
         
@@ -743,6 +924,7 @@ async def send_wechat_notification(summary: str, results: list):
 
 async def main():
     parse_args()
+    trim_log()
     log("=" * 60)
     mode_str = "Serverless" if SERVERLESS else "本地"
     log(f"公众号文章TTS自动化 开始运行 [{mode_str}模式]")
@@ -772,15 +954,50 @@ async def main():
             save_articles_json(results)
             log(f"[INFO] Serverless模式: articles.json -> {ARTICLES_JSON}")
             log(f"[INFO] MP3文件目录: {AUDIO_DIR}")
+            # 写运行日志
+            log_entries = []
+            for r in results:
+                log_entries.append({
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "source": r["name"],
+                    "title": r.get("title", ""),
+                    "audio": os.path.basename(r.get("mp3_path", "")) if r.get("mp3_path") else "",
+                    "status": "ok" if r["success"] else "fail",
+                    "mode": "CI"
+                })
+            append_run_log(log_entries)
         else:
-            # 本地模式：复制到工作区 & 生成通知 & 微信推送
+            # 本地模式：复制到工作区 & gh-pages & 生成通知 & 微信推送
             for r in results:
                 if r["success"] and r.get("mp3_path"):
                     workspace_path = copy_to_workspace(r["mp3_path"])
                     if workspace_path:
                         log(f"[INFO] 已同步到工作区: {os.path.basename(workspace_path)}")
+                    ghpages_path = copy_to_ghpages(r["mp3_path"])
+                    if ghpages_path:
+                        log(f"[INFO] 已同步到gh-pages: {os.path.basename(ghpages_path)}")
 
             save_articles_json(results)
+            # 写运行日志
+            log_entries = []
+            for r in results:
+                log_entries.append({
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "source": r["name"],
+                    "title": r.get("title", ""),
+                    "audio": os.path.basename(r.get("mp3_path", "")) if r.get("mp3_path") else "",
+                    "status": "ok" if r["success"] else "fail",
+                    "mode": "本地",
+                    "reason": r.get("reason", "") if not r["success"] else ""
+                })
+            append_run_log(log_entries)
+
+            # 同步 articles.json 到 gh-pages
+            sync_articles_to_ghpages()
+            # 同步运行日志到 gh-pages
+            sync_run_log_to_ghpages()
+            # 推送到 GitHub Pages
+            git_push_ghpages()
             summary = create_notification(results)
             log(f"[INFO] 通知文件已生成: {NOTIFICATION_FILE}")
             await send_wechat_notification(summary, results)
@@ -788,6 +1005,24 @@ async def main():
             log(f"[INFO] 已同步到小程序，请打开 WorkBuddy 小程序查看")
 
     log("=" * 60)
+
+    # 记录所有结果到运行日志（包括失败）
+    if success_count == 0:
+        log_entries = []
+        for r in results:
+            log_entries.append({
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "source": r["name"],
+                "title": r.get("title", ""),
+                "audio": "",
+                "status": "fail",
+                "mode": "CI" if SERVERLESS else "本地",
+                "reason": r.get("reason", "未知原因")
+            })
+        append_run_log(log_entries)
+        if not SERVERLESS:
+            sync_run_log_to_ghpages()
+            git_push_ghpages()
 
 
 if __name__ == "__main__":

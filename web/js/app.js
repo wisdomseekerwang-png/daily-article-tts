@@ -5,6 +5,7 @@
     const DATA_URL = 'data/articles.json';
     const AUDIO_DIR = 'audio/';
     const STORAGE_KEY = 'radio_schedule_v2';
+    const LISTENED_KEY = 'radio_listened';
     const DEFAULT_SLOTS = [
         { enabled: true, hour: 8, minute: 0 },
         { enabled: true, hour: 12, minute: 0 },
@@ -68,6 +69,32 @@
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     };
 
+    // ============== 已听追踪 ==============
+    const getListenedSet = () => {
+        try {
+            return new Set(JSON.parse(localStorage.getItem(LISTENED_KEY) || '[]'));
+        } catch(e) { return new Set(); }
+    };
+    const saveListenedSet = (set) => {
+        try { localStorage.setItem(LISTENED_KEY, JSON.stringify([...set])); } catch(e) {}
+    };
+    const markListened = (article) => {
+        if (!article || !article.audio) return;
+        const set = getListenedSet();
+        set.add(article.audio);
+        saveListenedSet(set);
+    };
+    const isListened = (article) => {
+        return article && article.audio && getListenedSet().has(article.audio);
+    };
+    // Find next unlistened article starting from given index, wraps around
+    const findNextUnlistened = (startFrom) => {
+        for (let i = startFrom; i < articles.length; i++) {
+            if (!isListened(articles[i])) return i;
+        }
+        return -1; // all remaining are listened
+    };
+
     // Create today card
     const createTodayCard = (article) => {
         const cls = sourceClass(article.source);
@@ -86,6 +113,9 @@
                 <a href="${article.url}" target="_blank" class="btn btn-outline">
                     &#128196; 阅读原文
                 </a>
+                <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();app.markListened(${articles.indexOf(article)})" title="标记已听">
+                    &#10003;
+                </button>
             </div>
         `;
         return card;
@@ -94,11 +124,13 @@
     // Create history card
     const createHistoryCard = (article) => {
         const cls = sourceClass(article.source);
+        const listened = isListened(article);
         const card = document.createElement('div');
-        card.className = 'history-card';
-        card.onclick = () => app.play(articles.indexOf(article));
+        card.className = 'history-card' + (listened ? ' listened' : '');
+        const idx = articles.indexOf(article);
+        card.onclick = () => app.play(idx);
         card.innerHTML = `
-            <div class="play-icon">&#9654;</div>
+            <div class="play-icon">${listened ? '&#10003;' : '&#9654;'}</div>
             <div class="source-dot ${cls}"></div>
             <div class="card-body">
                 <div class="card-title">${article.title}</div>
@@ -106,8 +138,10 @@
                     <span>${article.source}</span>
                     <span class="dot"></span>
                     <span>${formatDate(article.publish_time || article.date)}</span>
+                    ${listened ? '<span class="listened-badge">已听</span>' : ''}
                 </div>
             </div>
+            ${!listened ? `<button class="btn-icon btn-mark-listened" onclick="event.stopPropagation();app.markListened(${idx})" title="标记已听">&#10003;</button>` : ''}
         `;
         return card;
     };
@@ -123,19 +157,22 @@
         }
 
         const today = getToday();
-        const todayArticles = articles.filter(a => a.date === today);
-        const historyArticles = articles.filter(a => a.date !== today);
+        // Split: today unlistened → today section; listened + older → history
+        const todayUnlistened = articles.filter(a => a.date === today && !isListened(a));
+        const historyArticles = articles.filter(a => a.date !== today || isListened(a));
 
-        // Today
-        if (todayArticles.length > 0) {
+        // Today (only unlistened)
+        if (todayUnlistened.length > 0) {
             todaySection.style.display = 'block';
-            todayArticles.forEach(a => todayCards.appendChild(createTodayCard(a)));
+            todayUnlistened.forEach(a => todayCards.appendChild(createTodayCard(a)));
+        } else {
+            todaySection.style.display = 'none';
         }
 
-        // History
+        // History (listened today + older articles)
         if (historyArticles.length > 0) {
             historyArticles.forEach(a => articleList.appendChild(createHistoryCard(a)));
-        } else if (todayArticles.length === 0) {
+        } else if (todayUnlistened.length === 0) {
             articleList.innerHTML = '<p class="loading">暂无文章，请等待自动抓取...</p>';
         }
     };
@@ -199,14 +236,22 @@
 
     audio.addEventListener('ended', () => {
         updatePlayButton();
+        // Mark current article as listened
+        if (currentIndex >= 0 && articles[currentIndex]) {
+            markListened(articles[currentIndex]);
+        }
         if (isPlayAll) {
-            if (currentIndex < articles.length - 1) {
-                showPlayer(currentIndex + 1);
+            render(); // Re-render to move listened article to history
+            // Find next unlistened article
+            const nextIndex = findNextUnlistened(currentIndex + 1);
+            if (nextIndex >= 0) {
+                showPlayer(nextIndex);
             } else {
                 stopPlayAll();
             }
         } else {
-            playNext();
+            // Single play: don't auto-advance, just mark as listened and re-render
+            render();
         }
     });
 
@@ -262,6 +307,25 @@
         return `${bj.getFullYear()}-${String(bj.getMonth()+1).padStart(2,'0')}-${String(bj.getDate()).padStart(2,'0')}`;
     };
 
+    // Try autoplay; returns a Promise. On iOS without user gesture, it rejects.
+    const tryAutoPlay = (index) => {
+        const article = articles[index];
+        if (!article || !article.audio) return Promise.reject('no audio');
+
+        currentIndex = index;
+        const cls = sourceClass(article.source);
+        playerSource.textContent = article.source;
+        playerSource.className = `player-source ${cls}`;
+        playerTitle.textContent = article.title;
+        audio.src = AUDIO_DIR + article.audio;
+        audio.load();
+        player.style.display = 'block';
+
+        const promise = audio.play();
+        updatePlayButton();
+        return promise !== undefined ? promise : Promise.resolve();
+    };
+
     const checkAutoPlay = () => {
         const config = getScheduleConfig();
         if (!config.enabled) return;
@@ -287,25 +351,42 @@
             config.notifiedDates[slotNotifiedKey] = true;
             saveScheduleConfig(config);
 
-            // Find today's articles
+            const timeStr = `${String(slot.hour).padStart(2,'0')}:${String(slot.minute).padStart(2,'0')}`;
             const todayArticles = articles.filter(a => a.date === today);
 
             if (todayArticles.length > 0) {
-                showAlarm(`定时播放 (${String(slot.hour).padStart(2,'0')}:${String(slot.minute).padStart(2,'0')})：今日早报共 ${todayArticles.length} 篇，开始连播...`);
-                setTimeout(() => {
-                    const startIdx = articles.findIndex(a => a.date === today);
-                    if (startIdx >= 0) {
-                        isPlayAll = true;
-                        btnPlayAll.classList.add('playing');
-                        btnPlayAll.innerHTML = '&#9646;&#9646; 停止';
-                        showPlayer(startIdx);
-                    }
-                }, 1500);
+                const startIdx = articles.findIndex(a => a.date === today);
+                if (startIdx >= 0) {
+                    isPlayAll = true;
+                    btnPlayAll.classList.add('playing');
+                    btnPlayAll.innerHTML = '&#9646;&#9646; 停止';
+
+                    tryAutoPlay(startIdx).then(() => {
+                        // Autoplay succeeded (desktop, or iOS after previous interaction)
+                        showAlarm(`定时播放 (${timeStr})：今日早报共 ${todayArticles.length} 篇，开始连播...`);
+                    }).catch(() => {
+                        // Autoplay blocked (iOS Safari/Chrome) — show clickable button
+                        showAlarm(
+                            `定时播放 (${timeStr})：今日早报共 ${todayArticles.length} 篇，请点此播放`,
+                            { text: '\u25B6 点击播放', handler: () => {
+                                audio.play().catch(() => {});
+                                updatePlayButton();
+                            }}
+                        );
+                    });
+                }
             } else {
-                showAlarm(`定时播放 (${String(slot.hour).padStart(2,'0')}:${String(slot.minute).padStart(2,'0')})：正在播放最新早报...`);
-                setTimeout(() => {
-                    showPlayer(0);
-                }, 1500);
+                tryAutoPlay(0).then(() => {
+                    showAlarm(`定时播放 (${timeStr})：正在播放最新早报...`);
+                }).catch(() => {
+                    showAlarm(
+                        `定时播放 (${timeStr})：正在播放最新早报，请点此播放`,
+                        { text: '\u25B6 点击播放', handler: () => {
+                            audio.play().catch(() => {});
+                            updatePlayButton();
+                        }}
+                    );
+                });
             }
             return; // Only trigger one slot per minute
         }
@@ -321,19 +402,51 @@
     };
 
     // Alarm bar
-    const showAlarm = (text) => {
+    let alarmHideTimer = null;
+
+    const showAlarm = (text, action) => {
         const bar = document.getElementById('alarm-bar');
         const alarmText = document.getElementById('alarm-text');
+        const alarmAction = document.getElementById('alarm-action');
+
         alarmText.textContent = text;
         bar.style.display = 'flex';
+
+        // Clear previous hide timer
+        if (alarmHideTimer) {
+            clearTimeout(alarmHideTimer);
+            alarmHideTimer = null;
+        }
+
+        // Action button (for iOS autoplay fallback)
+        if (action) {
+            alarmAction.textContent = action.text;
+            alarmAction.style.display = 'inline-block';
+            alarmAction.onclick = () => {
+                action.handler();
+                bar.style.display = 'none';
+                if (alarmHideTimer) {
+                    clearTimeout(alarmHideTimer);
+                    alarmHideTimer = null;
+                }
+            };
+        } else {
+            alarmAction.style.display = 'none';
+            alarmAction.onclick = null;
+            // Auto-hide after 15s only when no action needed
+            alarmHideTimer = setTimeout(() => { bar.style.display = 'none'; }, 15000);
+        }
+
         // Send browser notification
         sendNotification('早报电台', text);
-        // Auto-hide after 15s
-        setTimeout(() => { bar.style.display = 'none'; }, 15000);
     };
 
     document.getElementById('alarm-dismiss').addEventListener('click', () => {
         document.getElementById('alarm-bar').style.display = 'none';
+        if (alarmHideTimer) {
+            clearTimeout(alarmHideTimer);
+            alarmHideTimer = null;
+        }
     });
 
     // ============== 帮助弹窗 ==============
@@ -490,6 +603,198 @@
         }
     });
 
+    // ============== 声控指令 (Web Speech API) ==============
+    // When voice is ON: audio pauses so mic can hear user clearly.
+    // After command: if command didn't explicitly pause/stop, audio auto-resumes.
+    const btnVoice = document.getElementById('btn-voice');
+    const voiceToast = document.getElementById('voice-toast');
+    const voiceToastText = document.getElementById('voice-toast-text');
+    let voiceActive = false;
+    let recognition = null;
+    let voiceToastTimer = null;
+    let _wasPlayingBefore = false; // Was audio playing when voice was activated?
+    let _resumeTimer = null;       // Timer to auto-resume after unrecognized command
+
+    // Check browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const isVoiceSupported = !!SpeechRecognition;
+
+    // Hide mic button if not supported (iOS Safari)
+    if (!isVoiceSupported) {
+        btnVoice.style.display = 'none';
+    }
+
+    const showVoiceToast = (text, duration) => {
+        if (voiceToastTimer) clearTimeout(voiceToastTimer);
+        voiceToastText.textContent = text;
+        voiceToast.style.display = 'flex';
+        if (duration) {
+            voiceToastTimer = setTimeout(() => { voiceToast.style.display = 'none'; }, duration);
+        }
+    };
+
+    const hideVoiceToast = () => {
+        if (voiceToastTimer) clearTimeout(voiceToastTimer);
+        voiceToast.style.display = 'none';
+    };
+
+    // Cancel any pending auto-resume
+    const cancelResume = () => {
+        if (_resumeTimer) { clearTimeout(_resumeTimer); _resumeTimer = null; }
+    };
+
+    // Auto-resume audio after delay (for unrecognized commands)
+    const scheduleResume = (delay = 2500) => {
+        cancelResume();
+        _resumeTimer = setTimeout(() => {
+            if (voiceActive && _wasPlayingBefore && audio.paused && currentIndex >= 0) {
+                audio.play().catch(() => {});
+                updatePlayButton();
+            }
+        }, delay);
+    };
+
+    // Returns true if the command explicitly controls playback (don't auto-resume)
+    const processVoiceCommand = (transcript) => {
+        const t = transcript.trim();
+        console.log('[早报电台] 声控指令:', t);
+
+        // Normalize: remove spaces
+        const cmd = t.replace(/\s/g, '');
+        let isPlaybackCommand = true; // By default, don't auto-resume
+
+        if (cmd.includes('下一篇') || cmd.includes('下一个') || cmd.includes('下一曲')) {
+            playNext();
+            showVoiceToast('▶ 下一篇', 2000);
+            // playNext calls showPlayer which auto-plays — don't resume
+        } else if (cmd.includes('上一篇') || cmd.includes('上一个') || cmd.includes('上一曲')) {
+            playPrev();
+            showVoiceToast('▶ 上一篇', 2000);
+        } else if (cmd.includes('暂停') || cmd.includes('停止播') || cmd === '停') {
+            audio.pause();
+            updatePlayButton();
+            _wasPlayingBefore = false; // User explicitly paused, don't resume
+            showVoiceToast('⏸ 已暂停', 2000);
+        } else if (cmd.includes('播放') || cmd.includes('开始') || cmd.includes('继续')) {
+            if (currentIndex < 0 && articles.length > 0) {
+                showPlayer(0);
+            } else {
+                audio.play().catch(() => {});
+                updatePlayButton();
+            }
+            showVoiceToast('▶ 播放', 2000);
+        } else if (cmd.includes('连播') || cmd.includes('全部播放') || cmd.includes('播放全部')) {
+            if (!isPlayAll) {
+                playAllArticles();
+            }
+            showVoiceToast('▶ 连播全部', 2000);
+        } else if (cmd.includes('停止') || cmd.includes('取消连播') || cmd.includes('退出')) {
+            if (isPlayAll) stopPlayAll();
+            audio.pause();
+            audio.currentTime = 0;
+            updatePlayButton();
+            _wasPlayingBefore = false; // User explicitly stopped
+            showVoiceToast('⏹ 已停止', 2000);
+        } else if (cmd.includes('第一篇') || cmd.includes('从头')) {
+            if (articles.length > 0) showPlayer(0);
+            showVoiceToast('▶ 第一篇', 2000);
+        } else if (cmd.includes('最后一篇') || cmd.includes('最后')) {
+            if (articles.length > 0) showPlayer(articles.length - 1);
+            showVoiceToast('▶ 最后一篇', 2000);
+        } else {
+            isPlaybackCommand = false;
+            showVoiceToast('❓ 未识别: ' + t, 2500);
+        }
+        return isPlaybackCommand;
+    };
+
+    const startVoice = () => {
+        if (!isVoiceSupported) return;
+        if (recognition) {
+            recognition.abort();
+        }
+        recognition = new SpeechRecognition();
+        recognition.lang = 'zh-CN';
+        recognition.continuous = true;
+        recognition.interimResults = false;
+
+        recognition.onstart = () => {
+            voiceActive = true;
+            btnVoice.classList.add('voice-on');
+            // Pause audio so mic can hear user clearly
+            _wasPlayingBefore = !audio.paused && currentIndex >= 0;
+            if (_wasPlayingBefore) {
+                audio.pause();
+                updatePlayButton();
+            }
+            showVoiceToast('🎤 正在聆听... 试试说「播放」「下一篇」「暂停」', 0);
+        };
+
+        recognition.onresult = (event) => {
+            cancelResume();
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                if (event.results[i].isFinal) {
+                    const handled = processVoiceCommand(event.results[i][0].transcript);
+                    // If command was not recognized, schedule auto-resume
+                    if (!handled) {
+                        scheduleResume(2500);
+                    }
+                }
+            }
+        };
+
+        recognition.onerror = (event) => {
+            if (event.error === 'not-allowed') {
+                showVoiceToast('麦克风权限被拒绝', 3000);
+                stopVoice();
+            } else if (event.error === 'no-speech') {
+                // Chrome fires this when only ambient noise — silently restart
+            } else if (event.error === 'aborted') {
+                // User-initiated stop, do nothing
+            } else {
+                console.warn('[早报电台] 语音识别错误:', event.error);
+            }
+        };
+
+        recognition.onend = () => {
+            // Auto-restart if still active (recognition stops after each result)
+            if (voiceActive) {
+                try { recognition.start(); } catch(e) {}
+            }
+        };
+
+        try {
+            recognition.start();
+        } catch(e) {
+            showVoiceToast('启动语音失败', 2000);
+        }
+    };
+
+    const stopVoice = () => {
+        voiceActive = false;
+        cancelResume();
+        btnVoice.classList.remove('voice-on');
+        hideVoiceToast();
+        // Resume audio if it was playing before voice was activated
+        if (_wasPlayingBefore && audio.paused && currentIndex >= 0) {
+            audio.play().catch(() => {});
+            updatePlayButton();
+        }
+        _wasPlayingBefore = false;
+        if (recognition) {
+            try { recognition.abort(); } catch(e) {}
+            recognition = null;
+        }
+    };
+
+    btnVoice.addEventListener('click', () => {
+        if (voiceActive) {
+            stopVoice();
+        } else {
+            startVoice();
+        }
+    });
+
     // Load data
     fetch(DATA_URL)
         .then(r => r.json())
@@ -504,5 +809,64 @@
         });
 
     // Expose to global
-    window.app = { play: showPlayer };
+    window.app = { play: showPlayer, markListened: (idx) => { markListened(articles[idx]); render(); } };
+
+    // ============== 运行日志查看器 ==============
+    const btnLog = document.getElementById('btn-log');
+    const logModal = document.getElementById('log-modal');
+    const logClose = document.getElementById('log-close');
+    const logOverlay = document.querySelector('.log-overlay');
+    const logBody = document.getElementById('log-body');
+
+    const statusMap = { ok: '✅', fail: '❌', skip: '⏭️' };
+    const modeColor = { '本地': '#2d6a4f', 'AI自动化': '#e76f51', 'CI': '#1982c4' };
+
+    async function loadRunLog() {
+        logBody.innerHTML = '<p class="loading">加载中...</p>';
+        try {
+            const resp = await fetch('data/tts_run_log.json?t=' + Date.now());
+            const data = await resp.json();
+            if (!data || data.length === 0) {
+                logBody.innerHTML = '<p class="log-empty">暂无运行日志</p>';
+                return;
+            }
+            // Group by date
+            const grouped = {};
+            data.forEach(e => {
+                const date = (e.timestamp || '').substring(0, 10);
+                if (!grouped[date]) grouped[date] = [];
+                grouped[date].push(e);
+            });
+            let html = '';
+            for (const [date, entries] of Object.entries(grouped)) {
+                html += `<div class="log-date">${date}</div>`;
+                html += '<div class="log-entries">';
+                entries.forEach(e => {
+                    const time = (e.timestamp || '').substring(11, 19);
+                    const icon = statusMap[e.status] || '❓';
+                    const modeStyle = modeColor[e.mode] ? `style="color:${modeColor[e.mode]}"` : '';
+                    const audioStr = e.audio ? `<span class="log-audio">${e.audio}</span>` : '';
+                    const reasonStr = e.reason ? `<span class="log-reason">${e.reason}</span>` : '';
+                    html += `<div class="log-entry">
+                        <span class="log-icon">${icon}</span>
+                        <span class="log-time">${time}</span>
+                        <span class="log-source" ${modeStyle}>${e.source || '?'}</span>
+                        <span class="log-title">${(e.title || '').substring(0, 30)}</span>
+                        ${audioStr}${reasonStr}
+                    </div>`;
+                });
+                html += '</div>';
+            }
+            logBody.innerHTML = html;
+        } catch (err) {
+            logBody.innerHTML = `<p class="log-empty">加载失败: ${err.message}</p>`;
+        }
+    }
+
+    btnLog.addEventListener('click', () => {
+        logModal.style.display = 'block';
+        loadRunLog();
+    });
+    logClose.addEventListener('click', () => { logModal.style.display = 'none'; });
+    logOverlay.addEventListener('click', () => { logModal.style.display = 'none'; });
 })();

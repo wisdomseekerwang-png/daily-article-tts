@@ -4,13 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>早报电台 - 公众号文章语音</title>
-    <link rel="stylesheet" href="css/style.css?v=5">
+    <link rel="stylesheet" href="css/style.css?v=13">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
 </head>
 <body>
     <div id="alarm-bar" class="alarm-bar" style="display:none">
         <span class="alarm-icon">&#128276;</span>
         <span id="alarm-text" class="alarm-text"></span>
+        <button id="alarm-action" class="alarm-action" style="display:none">&#9654; 点击播放</button>
         <button id="alarm-dismiss" class="alarm-dismiss">&times;</button>
     </div>
 
@@ -100,7 +101,9 @@
                     </div>
                 </div>
                 <div class="header-actions">
+                    <button id="btn-log" class="btn-log" title="运行日志">&#128203;</button>
                     <button id="btn-play-all" class="btn-play-all" title="播放全部文章">&#9654; 连播</button>
+                    <button id="btn-voice" class="btn-voice" title="声控指令 (Android/桌面)">🎤</button>
                     <button id="btn-notify" class="btn-notify" title="开启浏览器通知">&#128276;</button>
                 </div>
             </div>
@@ -205,7 +208,37 @@
                     <li>音频开头会播报「公众号名 + 文章名」，方便识别内容</li>
                 </ul>
             </div>
+
+            <div class="help-section">
+                <h3>声控指令</h3>
+                <p>点击顶部 <strong>🎤</strong> 按钮开启语音控制，支持以下指令：</p>
+                <div class="help-voice-cmds">
+                    <div class="voice-cmd"><span class="voice-cmd-key">播放</span><span class="voice-cmd-desc">开始/继续播放</span></div>
+                    <div class="voice-cmd"><span class="voice-cmd-key">暂停</span><span class="voice-cmd-desc">暂停当前播放</span></div>
+                    <div class="voice-cmd"><span class="voice-cmd-key">下一篇 / 上一篇</span><span class="voice-cmd-desc">切换文章</span></div>
+                    <div class="voice-cmd"><span class="voice-cmd-key">连播 / 停止</span><span class="voice-cmd-desc">全部连播 / 停止连播</span></div>
+                </div>
+                <p class="help-note">仅支持 Android Chrome 和桌面 Chrome。iPhone 暂不支持语音识别。</p>
+            </div>
         </div>
+    </div>
+
+    <div id="log-modal" class="log-modal" style="display:none">
+        <div class="log-overlay"></div>
+        <div class="log-content">
+            <div class="log-header">
+                <h2>运行日志</h2>
+                <button id="log-close" class="log-close">&times;</button>
+            </div>
+            <div id="log-body" class="log-body">
+                <p class="loading">加载中...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="voice-toast" class="voice-toast" style="display:none">
+        <span class="voice-toast-icon">🎤</span>
+        <span id="voice-toast-text" class="voice-toast-text"></span>
     </div>
 
     <div id="player" class="player" style="display:none">
@@ -227,6 +260,6 @@
         </div>
     </div>
 
-    <script src="js/app.js?v=5"></script>
+    <script src="js/app.js?v=13"></script>
 </body>
 </html>
