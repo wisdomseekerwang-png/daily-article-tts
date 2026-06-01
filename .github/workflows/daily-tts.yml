@@ -114,6 +114,97 @@ jobs:
             cp output/wxredian_state.json dist/wxredian_state.json
           fi
 
+      # ===== CI 运行日志 =====
+      - name: Fetch existing run log from gh-pages
+        run: |
+          curl -sL -o output/existing_run_log.json \
+            "https://raw.githubusercontent.com/${{ github.repository }}/gh-pages/data/tts_run_log.json" \
+            2>/dev/null || echo '[]' > output/existing_run_log.json
+
+      - name: Generate CI run log & merge with existing
+        run: |
+          python3 -c "
+          import json, os
+          from datetime import datetime, timezone, timedelta
+
+          CN_TZ = timezone(timedelta(hours=8))
+          now = datetime.now(CN_TZ).strftime('%Y-%m-%d %H:%M:%S')
+
+          # Load existing log from gh-pages
+          try:
+              with open('output/existing_run_log.json') as f:
+                  existing = json.load(f)
+          except:
+              existing = []
+
+          # Load run log from fetch_articles_tts.py (serverless mode)
+          try:
+              with open('output/tts_run_log.json') as f:
+                  serverless_log = json.load(f)
+          except:
+              serverless_log = []
+
+          # Load wxredian summary
+          try:
+              with open('output/wxredian_summary.json') as f:
+                  wxredian_summary = json.load(f)
+          except:
+              wxredian_summary = {}
+
+          # Generate run log entries for wxredian authors
+          wxredian_entries = []
+          wxredian_sources = ['孥孥的大树', '卢克文工作室', '远方青木']
+          # Track which sources had new articles from wxredian
+          wxredian_new_sources = {a['source'] for a in wxredian_summary.get('new_articles', [])}
+
+          for src in wxredian_sources:
+              if src in wxredian_new_sources:
+                  # Find the article details
+                  art = next((a for a in wxredian_summary['new_articles'] if a['source'] == src), None)
+                  wxredian_entries.append({
+                      'timestamp': now,
+                      'source': src,
+                      'title': art['title'] if art else '',
+                      'audio': art.get('audio', '') if art else '',
+                      'status': 'ok' if art and art.get('audio') else 'fail',
+                      'mode': 'CI'
+                  })
+              else:
+                  # No new article for this source
+                  wxredian_entries.append({
+                      'timestamp': now,
+                      'source': src,
+                      'title': '',
+                      'audio': '',
+                      'status': 'fail',
+                      'mode': 'CI',
+                      'reason': '今日无新文章' if not wxredian_summary.get('new_count') else '获取文章失败'
+                  })
+
+          # Merge all new entries
+          all_new = serverless_log + wxredian_entries
+
+          # Dedup by (timestamp, source)
+          existing_keys = {(e.get('timestamp', ''), e.get('source', '')) for e in existing}
+          added = 0
+          for entry in all_new:
+              key = (entry.get('timestamp', ''), entry.get('source', ''))
+              if key not in existing_keys:
+                  existing.append(entry)
+                  added += 1
+
+          # Sort by timestamp desc, max 500
+          existing.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+          existing = existing[:500]
+
+          # Write to dist/data
+          os.makedirs('dist/data', exist_ok=True)
+          with open('dist/data/tts_run_log.json', 'w', encoding='utf-8') as f:
+              json.dump(existing, f, ensure_ascii=False, indent=2)
+
+          print(f'CI run log: {added} new entries merged, {len(existing)} total')
+          "
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:

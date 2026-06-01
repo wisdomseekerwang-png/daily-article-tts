@@ -724,7 +724,7 @@ def sync_articles_to_ghpages():
 
 
 def git_push_ghpages():
-    """git add + commit + push .gh-pages-deploy/ 到 gh-pages 分支"""
+    """git add + commit + push .gh-pages-deploy/ 到 gh-pages 分支，失败时自动 pull rebase 重试"""
     try:
         ghpages_dir = os.path.join(WORKSPACE_DIR, ".gh-pages-deploy")
         if not os.path.isdir(os.path.join(ghpages_dir, ".git")):
@@ -742,14 +742,34 @@ def git_push_ghpages():
             ["git", "commit", "-m", f"auto update: TTS audio + articles ({datetime.now().strftime('%Y-%m-%d %H:%M')})"],
             cwd=ghpages_dir, capture_output=True, text=True
         )
-        subprocess.run(["git", "push", "origin", "gh-pages"], cwd=ghpages_dir, capture_output=True, text=True)
+        # 尝试 push，如果被拒绝则 fetch + reset --soft + 重新 commit + push
+        push_result = subprocess.run(["git", "push", "origin", "gh-pages"], cwd=ghpages_dir, capture_output=True, text=True)
+        if push_result.returncode != 0:
+            log("[WARN] push 被拒绝，尝试 fetch + rebase...")
+            subprocess.run(["git", "fetch", "origin", "gh-pages"], cwd=ghpages_dir, capture_output=True, text=True)
+            # 使用 reset --soft 保留本地变更，合并后重新 commit
+            subprocess.run(["git", "reset", "--soft", "origin/gh-pages"], cwd=ghpages_dir, capture_output=True, text=True)
+            subprocess.run(["git", "add", "-A"], cwd=ghpages_dir, capture_output=True, text=True)
+            # 用 ours 策略合并 articles.json 冲突
+            subprocess.run(["git", "commit", "--allow-empty", "-m",
+                            f"auto update: TTS audio + articles ({datetime.now().strftime('%Y-%m-%d %H:%M')})"],
+                           cwd=ghpages_dir, capture_output=True, text=True)
+            retry = subprocess.run(["git", "push", "origin", "gh-pages"], cwd=ghpages_dir, capture_output=True, text=True)
+            if retry.returncode != 0:
+                log(f"[WARN] push 重试也失败: {retry.stderr}")
+                return
         log("[OK] 已推送到 GitHub Pages")
     except Exception as e:
         log(f"[WARN] git push gh-pages 失败: {e}")
 
 
 # ============== 运行日志 (JSON) ==============
-RUN_LOG_JSON = os.path.join(WORKSPACE_DIR, "web", "data", "tts_run_log.json")
+# Serverless模式: 写到 output/tts_run_log.json，CI 负责合并到 gh-pages
+# 本地模式: 写到 web/data/tts_run_log.json
+if SERVERLESS:
+    RUN_LOG_JSON = os.path.join(OUTPUT_DIR, "tts_run_log.json")
+else:
+    RUN_LOG_JSON = os.path.join(WORKSPACE_DIR, "web", "data", "tts_run_log.json")
 
 
 def append_run_log(entries: list):
