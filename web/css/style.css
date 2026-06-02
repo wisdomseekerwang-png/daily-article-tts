@@ -11,6 +11,13 @@
     --lukewen: #1982c4;
     --xiaolonglong: #0096c7;
     --yuanfangqingmu: #386641;
+    --banzhuan: #d62828;
+    --longtan: #f77f00;
+    --gelan: #3a0ca3;
+    --jiazhi: #560bad;
+    --qixing: #0077b6;
+    --boge: #2a9d8f;
+    --unknown: #6c757d;
     --today-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     --shadow: 0 2px 12px rgba(0,0,0,0.08);
     --radius: 12px;
@@ -100,6 +107,13 @@ main {
 .card-today .source-tag.lukewen { background: var(--lukewen); }
 .card-today .source-tag.xiaolonglong { background: var(--xiaolonglong); }
 .card-today .source-tag.yuanfangqingmu { background: var(--yuanfangqingmu); }
+.card-today .source-tag.banzhuan { background: var(--banzhuan); }
+.card-today .source-tag.longtan { background: var(--longtan); }
+.card-today .source-tag.gelan { background: var(--gelan); }
+.card-today .source-tag.jiazhi { background: var(--jiazhi); }
+.card-today .source-tag.qixing { background: var(--qixing); }
+.card-today .source-tag.boge { background: var(--boge); }
+.card-today .source-tag.unknown { background: var(--unknown); }
 .card-today .card-date { font-size: 12px; color: var(--text-secondary); }
 .card-today .card-title {
     font-size: 16px;
@@ -234,6 +248,13 @@ main {
 .source-dot.lukewen { background: var(--lukewen); }
 .source-dot.xiaolonglong { background: var(--xiaolonglong); }
 .source-dot.yuanfangqingmu { background: var(--yuanfangqingmu); }
+.source-dot.banzhuan { background: var(--banzhuan); }
+.source-dot.longtan { background: var(--longtan); }
+.source-dot.gelan { background: var(--gelan); }
+.source-dot.jiazhi { background: var(--jiazhi); }
+.source-dot.qixing { background: var(--qixing); }
+.source-dot.boge { background: var(--boge); }
+.source-dot.unknown { background: var(--unknown); }
 
 .loading {
     text-align: center;

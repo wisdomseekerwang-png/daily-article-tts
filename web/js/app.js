@@ -33,13 +33,20 @@
 
     // Source config
     const sourceClass = (name) => {
+        if (!name) return 'unknown';
         if (name.includes('猫笔刀')) return 'maobidao';
         if (name.includes('刘备')) return 'liubei';
         if (name.includes('孥孥')) return 'nunu';
         if (name.includes('卢克文')) return 'lukewen';
         if (name.includes('小龙龙')) return 'xiaolonglong';
         if (name.includes('远方青木')) return 'yuanfangqingmu';
-        return '';
+        if (name.includes('搬砖小组')) return 'banzhuan';
+        if (name.includes('龙谈价值')) return 'longtan';
+        if (name.includes('格兰投研')) return 'gelan';
+        if (name.includes('价值事务所')) return 'jiazhi';
+        if (name.includes('棋行者')) return 'qixing';
+        if (name.includes('伯格医生')) return 'boge';
+        return 'unknown';
     };
 
     const formatDuration = (sec) => {
