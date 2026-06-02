@@ -46,6 +46,10 @@ SOURCES = [
     {"name": "卢克文工作室", "search_query": "卢克文工作室"},
     {"name": "海里的小龙龙", "search_query": "海里的小龙龙"},
     {"name": "远方青木", "search_query": "远方青木"},
+    {"name": "格兰投研", "search_query": "格兰投研"},
+    {"name": "价值事务所", "search_query": "价值事务所"},
+    {"name": "棋行者", "search_query": "棋行者"},
+    {"name": "伯格医生", "search_query": "伯格医生"},
 ]
 
 # ============== 全局模式 ==============

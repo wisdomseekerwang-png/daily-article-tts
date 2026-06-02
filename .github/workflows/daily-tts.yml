@@ -41,7 +41,7 @@ jobs:
             "https://raw.githubusercontent.com/${{ github.repository }}/gh-pages/wxredian_state.json" \
             2>/dev/null || echo '{}' > output/wxredian_state.json
 
-      - name: Fetch 3 authors from wxredian (孥孥/卢克文/远方青木)
+      - name: Fetch 5 authors from wxredian (孥孥/卢克文/远方青木/搬砖小组/龙谈价值)
         run: |
           python scripts/fetch_wxredian.py \
             --output-dir ./output \
@@ -153,7 +153,7 @@ jobs:
 
           # Generate run log entries for wxredian authors
           wxredian_entries = []
-          wxredian_sources = ['孥孥的大树', '卢克文工作室', '远方青木']
+          wxredian_sources = ['孥孥的大树', '卢克文工作室', '远方青木', '搬砖小组', '龙谈价值2023']
           # Track which sources had new articles from wxredian
           wxredian_new_sources = {a['source'] for a in wxredian_summary.get('new_articles', [])}
 
