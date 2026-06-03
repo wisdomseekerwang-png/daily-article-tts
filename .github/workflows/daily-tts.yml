@@ -33,7 +33,15 @@ jobs:
         run: python fetch_articles_tts.py --serverless --output-dir ./output
         continue-on-error: true
 
-      # ===== Job 2: 新4公众号 via wxredian =====
+      # ===== Job 2: 猫笔刀 via RSS =====
+      - name: Fetch 猫笔刀 articles via RSS
+        run: |
+          python scripts/fetch_maobidao.py \
+            --output-dir ./output \
+            --articles-json ./output/articles_maobidao.json
+        continue-on-error: true
+
+      # ===== Job 3: 5公众号 via wxredian =====
       - name: Fetch wxredian state from gh-pages
         run: |
           mkdir -p output
@@ -58,7 +66,7 @@ jobs:
             2>/dev/null || true
           python scripts/validate_json.py output/data/articles.json 2>/dev/null || echo '[]' > output/data/articles.json
 
-      - name: Merge wxredian articles into main articles.json
+      - name: Merge wxredian + maobidao articles into main articles.json
         run: |
           python3 -c "
           import json
@@ -68,21 +76,45 @@ jobs:
                   existing = json.load(f)
           except:
               existing = []
-          # Load wxredian new articles
-          try:
-              with open('output/articles_wxredian.json') as f:
-                  wxredian = json.load(f)
-          except:
-              wxredian = []
-          # Dedup by (date, source)
+
           existing_keys = {(a.get('date',''), a.get('source','')) for a in existing}
-          new_items = [a for a in wxredian if (a.get('date',''), a.get('source','')) not in existing_keys]
-          existing.extend(new_items)
+          existing_urls = {a.get('url','') for a in existing if a.get('url')}
+          existing_titles = {(a.get('source',''), a.get('title','')) for a in existing}
+
+          def merge_articles(new_file, label):
+              try:
+                  with open(new_file) as f:
+                      new = json.load(f)
+              except:
+                  new = []
+              added = 0
+              for a in new:
+                  key = (a.get('date',''), a.get('source',''))
+                  if key in existing_keys:
+                      continue
+                  if a.get('url') and a['url'] in existing_urls:
+                      continue
+                  title_key = (a.get('source',''), a.get('title',''))
+                  if title_key in existing_titles:
+                      continue
+                  existing.append(a)
+                  existing_keys.add(key)
+                  if a.get('url'):
+                      existing_urls.add(a['url'])
+                  existing_titles.add(title_key)
+                  added += 1
+              print(f'Merged: {added} new from {label}')
+              return added
+
+          total = merge_articles('output/articles_wxredian.json', 'wxredian')
+          total += merge_articles('output/articles_maobidao.json', 'maobidao')
+
           existing.sort(key=lambda x: x.get('date',''), reverse=True)
           with open('output/data/articles.json', 'w', encoding='utf-8') as f:
               json.dump(existing, f, ensure_ascii=False, indent=2)
-          print(f'Merged: {len(new_items)} new from wxredian, {len(existing)} total')
-          # Also merge wxredian MP3s into output/audio for deploy
+          print(f'Total: {len(existing)} articles, {total} new')
+
+          # Also merge MP3s into dist/audio for deploy
           import shutil, os
           if os.path.isdir('output/audio'):
               os.makedirs('dist/audio', exist_ok=True)
@@ -151,6 +183,13 @@ jobs:
           except:
               wxredian_summary = {}
 
+          # Load maobidao articles
+          try:
+              with open('output/articles_maobidao.json') as f:
+                  maobidao_articles = json.load(f)
+          except:
+              maobidao_articles = []
+
           # Generate run log entries for wxredian authors
           wxredian_entries = []
           wxredian_sources = ['孥孥的大树', '卢克文工作室', '远方青木', '搬砖小组', '龙谈价值2023']
@@ -176,13 +215,37 @@ jobs:
                       'source': src,
                       'title': '',
                       'audio': '',
-                      'status': 'fail',
+                      'status': 'skip',
                       'mode': 'CI',
-                      'reason': '今日无新文章' if not wxredian_summary.get('new_count') else '获取文章失败'
+                      'reason': '今日无新文章'
                   })
 
+          # Generate run log entry for 猫笔刀 (maobidao)
+          maobidao_entries = []
+          today_maobidao = [a for a in maobidao_articles if a.get('date') == now[:10]]
+          if today_maobidao:
+              for a in today_maobidao:
+                  maobidao_entries.append({
+                      'timestamp': now,
+                      'source': '猫笔刀',
+                      'title': a.get('title', ''),
+                      'audio': a.get('audio', ''),
+                      'status': 'ok' if a.get('audio') else 'fail',
+                      'mode': 'CI'
+                  })
+          else:
+              maobidao_entries.append({
+                  'timestamp': now,
+                  'source': '猫笔刀',
+                  'title': '',
+                  'audio': '',
+                  'status': 'skip',
+                  'mode': 'CI',
+                  'reason': '今日无新文章'
+              })
+
           # Merge all new entries
-          all_new = serverless_log + wxredian_entries
+          all_new = serverless_log + wxredian_entries + maobidao_entries
 
           # Dedup by (timestamp, source)
           existing_keys = {(e.get('timestamp', ''), e.get('source', '')) for e in existing}
