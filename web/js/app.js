@@ -12,7 +12,22 @@
     const SUPABASE_URL = 'https://bkfdqrcpaeaisakmqtua.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_hewlNcrb0nFfrywdgTIsIg_4nfdQ_';
     const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
-    const supabase = SUPABASE_ENABLED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+    let supabase = null;
+    let supabaseInitError = '';
+    if (SUPABASE_ENABLED) {
+        try {
+            if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                console.log('[播放日志] Supabase 客户端已初始化');
+            } else {
+                supabaseInitError = 'Supabase JS 库未加载';
+                console.warn('[播放日志] Supabase JS 库未加载');
+            }
+        } catch (e) {
+            supabaseInitError = e.message;
+            console.warn('[播放日志] Supabase 初始化失败:', e.message);
+        }
+    }
     const DEFAULT_SLOTS = [
         { enabled: true, hour: 8, minute: 0 },
         { enabled: true, hour: 12, minute: 0 },
@@ -183,14 +198,21 @@
                 title: entry.title,
                 article_date: entry.date,
                 audio: entry.audio,
-            }]).then(({ error }) => {
-                if (error) console.warn('[播放日志] Supabase上传失败:', error.message);
+            }]).then(({ data, error }) => {
+                if (error) {
+                    console.warn('[播放日志] Supabase上传失败:', error.message, error.code);
+                } else {
+                    console.log('[播放日志] Supabase上传成功');
+                }
             });
+        } else if (supabaseInitError) {
+            console.warn('[播放日志] Supabase未初始化:', supabaseInitError);
         }
     };
 
     // 从 Supabase 获取远程播放日志
     const fetchRemotePlayLogs = async () => {
+        lastRemoteError = '';
         if (!supabase) return [];
         try {
             const { data, error } = await supabase
@@ -208,6 +230,7 @@
                 audio: e.audio || '',
             }));
         } catch (err) {
+            lastRemoteError = err.message || String(err);
             console.warn('[播放日志] Supabase获取失败:', err);
             return [];
         }
@@ -997,6 +1020,8 @@
     const playLogOverlay = document.querySelector('.playlog-overlay');
     const playLogBody = document.getElementById('playlog-body');
 
+    let lastRemoteError = '';
+
     const renderPlayLogs = async () => {
         playLogBody.innerHTML = '<p class="loading">加载中...</p>';
 
@@ -1037,7 +1062,11 @@
             grouped[date].push(e);
         });
         let html = '';
-        if (SUPABASE_ENABLED) {
+        if (supabaseInitError) {
+            html += `<div class="playlog-sync-badge" style="color:#dc3545;background:#f8d7da;">❌ 同步失败: ${supabaseInitError}</div>`;
+        } else if (lastRemoteError) {
+            html += `<div class="playlog-sync-badge" style="color:#dc3545;background:#f8d7da;">❌ 同步失败: ${lastRemoteError}</div>`;
+        } else if (SUPABASE_ENABLED) {
             html += `<div class="playlog-sync-badge">☁️ 已同步 (${remoteLogs.length} 条远程, ${localLogs.length} 条本地)</div>`;
         } else {
             html += `<div class="playlog-sync-badge">💾 仅本地存储 (未配置云端同步)</div>`;
