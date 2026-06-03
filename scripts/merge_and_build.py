@@ -37,20 +37,36 @@ def main():
         except Exception:
             pass
 
-    # Merge: deduplicate by (date, source)
+    # Merge: 3-level dedup
     existing_keys = {(a["date"], a["source"]) for a in existing}
+    existing_urls = {a.get("url", "") for a in existing if a.get("url")}
+    existing_titles = {(a["source"], a["title"]) for a in existing}
     added = 0
+    skipped = 0
     for a in new_articles:
         key = (a["date"], a["source"])
-        if key not in existing_keys:
-            existing.append(a)
-            existing_keys.add(key)
-            added += 1
+        title_key = (a["source"], a["title"])
+        url = a.get("url", "")
+        if key in existing_keys:
+            skipped += 1
+            continue
+        if url and url in existing_urls:
+            skipped += 1
+            continue
+        if title_key in existing_titles:
+            skipped += 1
+            continue
+        existing.append(a)
+        existing_keys.add(key)
+        if url:
+            existing_urls.add(url)
+        existing_titles.add(title_key)
+        added += 1
 
     # Sort by date descending
     existing.sort(key=lambda x: x["date"], reverse=True)
 
-    print(f"Articles: {len(existing)} total, {added} new")
+    print(f"Articles: {len(existing)} total, {added} new, {skipped} skipped (dedup)")
 
     # Write merged articles.json
     merged_path = os.path.join(DIST_DIR, "data", "articles.json")

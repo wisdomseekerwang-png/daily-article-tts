@@ -119,28 +119,36 @@ def main():
         # Read local
         with open(local_articles, "r", encoding="utf-8") as f:
             local_entries = json.load(f)
-        # Pre-dedup local
+        # Pre-dedup local by (date, source) + (source, title)
         seen_local = set()
+        seen_local_titles = set()
         deduped_local = []
         for a in local_entries:
             key = (a.get("date", ""), a.get("source", ""))
-            if key not in seen_local:
-                seen_local.add(key)
-                deduped_local.append(a)
+            title_key = (a.get("source", ""), a.get("title", ""))
+            if key in seen_local or title_key in seen_local_titles:
+                continue
+            seen_local.add(key)
+            seen_local_titles.add(title_key)
+            deduped_local.append(a)
         local_entries = deduped_local
         # Read remote (if exists) and merge
         remote_entries = []
         if remote_articles.exists():
             with open(remote_articles, "r", encoding="utf-8") as f:
                 remote_entries = json.load(f)
-            # Pre-dedup remote
+            # Pre-dedup remote by (date, source) + (source, title)
             seen_remote = set()
+            seen_remote_titles = set()
             deduped_remote = []
             for a in remote_entries:
                 key = (a.get("date", ""), a.get("source", ""))
-                if key not in seen_remote:
-                    seen_remote.add(key)
-                    deduped_remote.append(a)
+                title_key = (a.get("source", ""), a.get("title", ""))
+                if key in seen_remote or title_key in seen_remote_titles:
+                    continue
+                seen_remote.add(key)
+                seen_remote_titles.add(title_key)
+                deduped_remote.append(a)
             remote_entries = deduped_remote
         # Merge: add local entries not in remote
         remote_keys = {(a.get("date", ""), a.get("source", "")) for a in remote_entries}
