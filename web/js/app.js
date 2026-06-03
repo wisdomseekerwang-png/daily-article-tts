@@ -6,7 +6,6 @@
     const AUDIO_DIR = 'audio/';
     const STORAGE_KEY = 'radio_schedule_v2';
     const LISTENED_KEY = 'radio_listened';
-    const PLAY_LOG_KEY = 'radio_play_log';
     const IP_CACHE_KEY = 'radio_ip_cache';
 
     const SUPABASE_URL = 'https://bkfdqrcpaeaisakmqtua.supabase.co';
@@ -154,20 +153,6 @@
         return 'unknown';
     };
 
-    const getPlayLogs = () => {
-        try {
-            return JSON.parse(localStorage.getItem(PLAY_LOG_KEY) || '[]');
-        } catch(e) { return []; }
-    };
-
-    const savePlayLogs = (logs) => {
-        try {
-            // Keep last 500 entries
-            if (logs.length > 500) logs = logs.slice(0, 500);
-            localStorage.setItem(PLAY_LOG_KEY, JSON.stringify(logs));
-        } catch(e) {}
-    };
-
     const addPlayLog = async (article) => {
         if (!article || !article.audio) return;
         const ip = await getVisitorIP();
@@ -175,29 +160,16 @@
         const bjOffset = 8 * 3600000;
         const bjTime = new Date(now.getTime() + now.getTimezoneOffset() * 60000 + bjOffset);
         const timestamp = bjTime.toISOString().replace('T', ' ').substring(0, 19);
-        const entry = {
-            ip: ip,
-            time: timestamp,
-            source: article.source || '',
-            title: article.title || '',
-            date: article.date || '',
-            audio: article.audio || '',
-        };
 
-        // 1. 本地存储（始终保存）
-        const logs = getPlayLogs();
-        logs.unshift(entry);
-        savePlayLogs(logs);
-
-        // 2. 上传到 Supabase（异步，不阻塞播放）
+        // 仅上传到 Supabase（异步，不阻塞播放）
         if (supabase) {
             supabase.from('play_logs').insert([{
-                ip: entry.ip,
-                time: entry.time,
-                source: entry.source,
-                title: entry.title,
-                article_date: entry.date,
-                audio: entry.audio,
+                ip: ip,
+                time: timestamp,
+                source: article.source || '',
+                title: article.title || '',
+                article_date: article.date || '',
+                audio: article.audio || '',
             }]).then(({ data, error }) => {
                 if (error) {
                     console.warn('[播放日志] Supabase上传失败:', error.message, error.code);
@@ -207,6 +179,8 @@
             });
         } else if (supabaseInitError) {
             console.warn('[播放日志] Supabase未初始化:', supabaseInitError);
+        } else {
+            console.warn('[播放日志] 无可用存储后端');
         }
     };
 
@@ -1025,38 +999,20 @@
     const renderPlayLogs = async () => {
         playLogBody.innerHTML = '<p class="loading">加载中...</p>';
 
-        // 获取远程日志
-        const remoteLogs = await fetchRemotePlayLogs();
-        const localLogs = getPlayLogs();
-
-        // 合并去重：以 (ip, time, source, title) 为唯一键
-        const seen = new Set();
-        const merged = [];
-        const addEntry = (e) => {
-            const key = `${e.ip}|${e.time}|${e.source}|${e.title}`;
-            if (!seen.has(key)) {
-                seen.add(key);
-                merged.push(e);
-            }
-        };
-        // 远程优先（更完整），本地补充
-        remoteLogs.forEach(addEntry);
-        localLogs.forEach(addEntry);
+        // 仅从 Supabase 获取远程日志
+        const logs = await fetchRemotePlayLogs();
 
         // 按时间倒序
-        merged.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+        logs.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
 
-        if (merged.length === 0) {
+        if (logs.length === 0) {
             playLogBody.innerHTML = '<p class="log-empty">暂无播放记录</p>';
             return;
         }
 
-        // 标记数据来源
-        const isRemote = (e) => remoteLogs.some(r => r.ip === e.ip && r.time === e.time && r.source === e.source && r.title === e.title);
-
         // Group by date
         const grouped = {};
-        merged.forEach(e => {
+        logs.forEach(e => {
             const date = (e.time || '').substring(0, 10);
             if (!grouped[date]) grouped[date] = [];
             grouped[date].push(e);
@@ -1067,9 +1023,9 @@
         } else if (lastRemoteError) {
             html += `<div class="playlog-sync-badge" style="color:#dc3545;background:#f8d7da;">❌ 同步失败: ${lastRemoteError}</div>`;
         } else if (SUPABASE_ENABLED) {
-            html += `<div class="playlog-sync-badge">☁️ 已同步 (${remoteLogs.length} 条远程, ${localLogs.length} 条本地)</div>`;
+            html += `<div class="playlog-sync-badge">☁️ 已同步 (${logs.length} 条)</div>`;
         } else {
-            html += `<div class="playlog-sync-badge">💾 仅本地存储 (未配置云端同步)</div>`;
+            html += `<div class="playlog-sync-badge">⚠️ 未配置云端同步</div>`;
         }
         for (const [date, entries] of Object.entries(grouped)) {
             html += `<div class="log-date">${date}</div>`;
@@ -1077,14 +1033,12 @@
             entries.forEach(e => {
                 const time = (e.time || '').substring(11, 19);
                 const cls = sourceClass(e.source);
-                const remote = isRemote(e);
                 html += `<div class="log-entry">
                     <span class="log-icon">🎧</span>
                     <span class="log-time">${time}</span>
                     <span class="playlog-ip">${e.ip || '?'}</span>
                     <span class="log-source ${cls}">${e.source || '?'}</span>
                     <span class="log-title">${(e.title || '').substring(0, 30)}</span>
-                    ${remote ? '<span class="playlog-cloud">☁</span>' : ''}
                 </div>`;
             });
             html += '</div>';
