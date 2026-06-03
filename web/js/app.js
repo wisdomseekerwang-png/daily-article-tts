@@ -10,7 +10,7 @@
     const IP_CACHE_KEY = 'radio_ip_cache';
 
     const SUPABASE_URL = 'https://bkfdqrcpaeaisakmqtua.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_hewlNcrb0nFfrywdgTIsIg_4nfdQ_';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJrZmRxcmNwYWVhaXNha21xdHVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjM3NjYsImV4cCI6MjA5NjAzOTc2Nn0.D_COQDiYwz3H-dMLHXpyWMYEMqqueHiNv8wzylGd5go';
     const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
     let supabase = null;
     let supabaseInitError = '';
