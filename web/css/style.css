@@ -878,4 +878,33 @@ main {
 @media (max-width: 480px) {
     .log-content { width: 95%; max-height: 85vh; }
     .log-audio, .log-reason { display: none; }
+    .playlog-ip { max-width: 80px; font-size: 10px !important; }
 }
+
+/* Play log specific */
+.playlog-ip {
+    font-size: 11px;
+    font-family: monospace;
+    color: #e85d04;
+    background: #fff3e0;
+    padding: 1px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.log-source.maobidao { color: var(--maobidao); }
+.log-source.liubei { color: var(--liubei); }
+.log-source.nunu { color: var(--nunu); }
+.log-source.lukewen { color: var(--lukewen); }
+.log-source.xiaolonglong { color: var(--xiaolonglong); }
+.log-source.yuanfangqingmu { color: var(--yuanfangqingmu); }
+.log-source.banzhuan { color: var(--banzhuan); }
+.log-source.longtan { color: var(--longtan); }
+.log-source.gelan { color: var(--gelan); }
+.log-source.jiazhi { color: var(--jiazhi); }
+.log-source.qixing { color: var(--qixing); }
+.log-source.boge { color: var(--boge); }
+.log-source.unknown { color: var(--unknown); }

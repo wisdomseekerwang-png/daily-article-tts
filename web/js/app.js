@@ -6,6 +6,8 @@
     const AUDIO_DIR = 'audio/';
     const STORAGE_KEY = 'radio_schedule_v2';
     const LISTENED_KEY = 'radio_listened';
+    const PLAY_LOG_KEY = 'radio_play_log';
+    const IP_CACHE_KEY = 'radio_ip_cache';
     const DEFAULT_SLOTS = [
         { enabled: true, hour: 8, minute: 0 },
         { enabled: true, hour: 12, minute: 0 },
@@ -100,6 +102,70 @@
             if (!isListened(articles[i])) return i;
         }
         return -1; // all remaining are listened
+    };
+
+    // ============== 播放日志 (IP + 时间 + 文章) ==============
+    let cachedIP = null;
+
+    const getVisitorIP = async () => {
+        if (cachedIP) return cachedIP;
+        // Check cache
+        try {
+            const cached = localStorage.getItem(IP_CACHE_KEY);
+            if (cached) {
+                const { ip, ts } = JSON.parse(cached);
+                // Cache for 24 hours
+                if (ip && Date.now() - ts < 86400000) {
+                    cachedIP = ip;
+                    return ip;
+                }
+            }
+        } catch(e) {}
+        // Fetch from ipify
+        try {
+            const resp = await fetch('https://api.ipify.org?format=json');
+            const data = await resp.json();
+            if (data.ip) {
+                cachedIP = data.ip;
+                localStorage.setItem(IP_CACHE_KEY, JSON.stringify({ ip: data.ip, ts: Date.now() }));
+                return data.ip;
+            }
+        } catch(e) {}
+        return 'unknown';
+    };
+
+    const getPlayLogs = () => {
+        try {
+            return JSON.parse(localStorage.getItem(PLAY_LOG_KEY) || '[]');
+        } catch(e) { return []; }
+    };
+
+    const savePlayLogs = (logs) => {
+        try {
+            // Keep last 500 entries
+            if (logs.length > 500) logs = logs.slice(0, 500);
+            localStorage.setItem(PLAY_LOG_KEY, JSON.stringify(logs));
+        } catch(e) {}
+    };
+
+    const addPlayLog = async (article) => {
+        if (!article || !article.audio) return;
+        const ip = await getVisitorIP();
+        const now = new Date();
+        const bjOffset = 8 * 3600000;
+        const bjTime = new Date(now.getTime() + now.getTimezoneOffset() * 60000 + bjOffset);
+        const timestamp = bjTime.toISOString().replace('T', ' ').substring(0, 19);
+        const entry = {
+            ip: ip,
+            time: timestamp,
+            source: article.source || '',
+            title: article.title || '',
+            date: article.date || '',
+            audio: article.audio || '',
+        };
+        const logs = getPlayLogs();
+        logs.unshift(entry); // newest first
+        savePlayLogs(logs);
     };
 
     // Create today card
@@ -202,6 +268,7 @@
 
         audio.play().catch(() => {});
         updatePlayButton();
+        addPlayLog(article);
     };
 
     const updatePlayButton = () => {
@@ -330,6 +397,7 @@
 
         const promise = audio.play();
         updatePlayButton();
+        addPlayLog(article);
         return promise !== undefined ? promise : Promise.resolve();
     };
 
@@ -876,4 +944,51 @@
     });
     logClose.addEventListener('click', () => { logModal.style.display = 'none'; });
     logOverlay.addEventListener('click', () => { logModal.style.display = 'none'; });
+
+    // ============== 播放日志查看器 ==============
+    const btnPlayLog = document.getElementById('btn-play-log');
+    const playLogModal = document.getElementById('playlog-modal');
+    const playLogClose = document.getElementById('playlog-close');
+    const playLogOverlay = document.querySelector('.playlog-overlay');
+    const playLogBody = document.getElementById('playlog-body');
+
+    const renderPlayLogs = () => {
+        const logs = getPlayLogs();
+        if (!logs || logs.length === 0) {
+            playLogBody.innerHTML = '<p class="log-empty">暂无播放记录</p>';
+            return;
+        }
+        // Group by date
+        const grouped = {};
+        logs.forEach(e => {
+            const date = (e.time || '').substring(0, 10);
+            if (!grouped[date]) grouped[date] = [];
+            grouped[date].push(e);
+        });
+        let html = '';
+        for (const [date, entries] of Object.entries(grouped)) {
+            html += `<div class="log-date">${date}</div>`;
+            html += '<div class="log-entries">';
+            entries.forEach(e => {
+                const time = (e.time || '').substring(11, 19);
+                const cls = sourceClass(e.source);
+                html += `<div class="log-entry">
+                    <span class="log-icon">🎧</span>
+                    <span class="log-time">${time}</span>
+                    <span class="playlog-ip">${e.ip || '?'}</span>
+                    <span class="log-source ${cls}">${e.source || '?'}</span>
+                    <span class="log-title">${(e.title || '').substring(0, 30)}</span>
+                </div>`;
+            });
+            html += '</div>';
+        }
+        playLogBody.innerHTML = html;
+    };
+
+    btnPlayLog.addEventListener('click', () => {
+        playLogModal.style.display = 'block';
+        renderPlayLogs();
+    });
+    playLogClose.addEventListener('click', () => { playLogModal.style.display = 'none'; });
+    playLogOverlay.addEventListener('click', () => { playLogModal.style.display = 'none'; });
 })();

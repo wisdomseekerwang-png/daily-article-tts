@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>早报电台 - 公众号文章语音</title>
-    <link rel="stylesheet" href="css/style.css?v=14">
+    <link rel="stylesheet" href="css/style.css?v=15">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
 </head>
 <body>
@@ -102,6 +102,7 @@
                 </div>
                 <div class="header-actions">
                     <button id="btn-log" class="btn-log" title="运行日志">&#128203;</button>
+                    <button id="btn-play-log" class="btn-log" title="播放日志">&#127911;</button>
                     <button id="btn-play-all" class="btn-play-all" title="播放全部文章">&#9654; 连播</button>
                     <button id="btn-voice" class="btn-voice" title="声控指令 (Android/桌面)">🎤</button>
                     <button id="btn-notify" class="btn-notify" title="开启浏览器通知">&#128276;</button>
@@ -236,6 +237,19 @@
         </div>
     </div>
 
+    <div id="playlog-modal" class="log-modal" style="display:none">
+        <div class="playlog-overlay"></div>
+        <div class="log-content">
+            <div class="log-header">
+                <h2>播放日志</h2>
+                <button id="playlog-close" class="log-close">&times;</button>
+            </div>
+            <div id="playlog-body" class="log-body">
+                <p class="loading">加载中...</p>
+            </div>
+        </div>
+    </div>
+
     <div id="voice-toast" class="voice-toast" style="display:none">
         <span class="voice-toast-icon">🎤</span>
         <span id="voice-toast-text" class="voice-toast-text"></span>
@@ -260,6 +274,6 @@
         </div>
     </div>
 
-    <script src="js/app.js?v=14"></script>
+    <script src="js/app.js?v=15"></script>
 </body>
 </html>
