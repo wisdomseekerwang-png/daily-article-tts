@@ -12,6 +12,7 @@
     const SUPABASE_URL = 'https://bkfdqrcpaeaisakmqtua.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_hewlNcrb0nFfrywdgTIsIg_4nfdQ_';
     const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+    const supabase = SUPABASE_ENABLED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
     const DEFAULT_SLOTS = [
         { enabled: true, hour: 8, minute: 0 },
         { enabled: true, hour: 12, minute: 0 },
@@ -174,44 +175,30 @@
         savePlayLogs(logs);
 
         // 2. 上传到 Supabase（异步，不阻塞播放）
-        if (SUPABASE_ENABLED) {
-            fetch(`${SUPABASE_URL}/rest/v1/play_logs`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                    'Prefer': 'return=minimal',
-                },
-                body: JSON.stringify({
-                    ip: entry.ip,
-                    time: entry.time,
-                    source: entry.source,
-                    title: entry.title,
-                    article_date: entry.date,
-                    audio: entry.audio,
-                }),
-            }).catch(err => {
-                console.warn('[播放日志] Supabase上传失败:', err);
+        if (supabase) {
+            supabase.from('play_logs').insert([{
+                ip: entry.ip,
+                time: entry.time,
+                source: entry.source,
+                title: entry.title,
+                article_date: entry.date,
+                audio: entry.audio,
+            }]).then(({ error }) => {
+                if (error) console.warn('[播放日志] Supabase上传失败:', error.message);
             });
         }
     };
 
     // 从 Supabase 获取远程播放日志
     const fetchRemotePlayLogs = async () => {
-        if (!SUPABASE_ENABLED) return [];
+        if (!supabase) return [];
         try {
-            const resp = await fetch(
-                `${SUPABASE_URL}/rest/v1/play_logs?select=ip,time,source,title,article_date,audio&order=time.desc&limit=200`,
-                {
-                    headers: {
-                        'apikey': SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                    },
-                }
-            );
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const data = await resp.json();
+            const { data, error } = await supabase
+                .from('play_logs')
+                .select('ip,time,source,title,article_date,audio')
+                .order('time', { ascending: false })
+                .limit(200);
+            if (error) throw error;
             return (data || []).map(e => ({
                 ip: e.ip || 'unknown',
                 time: e.time ? e.time.replace('T', ' ').substring(0, 19) : '',
