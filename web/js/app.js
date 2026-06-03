@@ -9,10 +9,8 @@
     const PLAY_LOG_KEY = 'radio_play_log';
     const IP_CACHE_KEY = 'radio_ip_cache';
 
-    // ============== Supabase 后端配置 ==============
-    // 填入你的 Supabase 项目 URL 和 anon key（在 Project Settings > API 中找到）
-    const SUPABASE_URL = '';  // e.g. 'https://xxxxx.supabase.co'
-    const SUPABASE_ANON_KEY = '';  // e.g. 'eyJhbGciOiJIUzI1NiIs...'
+    const SUPABASE_URL = 'https://bkfdqrcpaeaisakmqtua.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_hewlNcrb0nFfrywdgTIsIg_4nfdQ_';
     const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
     const DEFAULT_SLOTS = [
         { enabled: true, hour: 8, minute: 0 },
