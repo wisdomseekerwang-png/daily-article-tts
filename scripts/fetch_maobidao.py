@@ -29,7 +29,9 @@ VOICE_PITCH = "+0Hz"
 MAX_TTS_CHARS = 3500
 
 # ============== maobidao Config ==============
+WP_API_URL = "https://maobidao.cn/wp-json/wp/v2/posts"
 RSS_URL = "https://maobidao.cn/feed/"
+RSS2JSON_URL = "https://api.rss2json.com/v1/api.json"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 SOURCE_NAME = "猫笔刀"
 
@@ -134,6 +136,31 @@ def parse_rss(xml_text: str) -> list:
     return items
 
 
+def parse_rss_json(data: dict) -> list:
+    """Parse RSS2JSON API response and return list of articles."""
+    items = []
+    for item in data.get("items", []):
+        pub_date = item.get("pubDate", "")
+        try:
+            dt = datetime.strptime(pub_date, "%Y-%m-%d %H:%M:%S")
+            date_str = dt.strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            try:
+                dt = datetime.strptime(pub_date, "%Y-%m-%dT%H:%M:%S%z")
+                date_str = dt.astimezone(CN_TZ).strftime("%Y-%m-%d")
+            except (ValueError, TypeError):
+                date_str = ""
+
+        content_html = item.get("content", "") or item.get("description", "")
+        items.append({
+            "title": item.get("title", ""),
+            "link": item.get("link", ""),
+            "date": date_str,
+            "content_html": content_html,
+        })
+    return items
+
+
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", required=True)
@@ -151,37 +178,68 @@ async def main():
     # Load existing articles for dedup
     existing_articles = load_json(articles_file, default=[])
 
-    # Step 1: Fetch RSS feed
-    log(f"Fetching RSS: {RSS_URL}")
+    # Step 1: Fetch articles (try WP REST API, then RSS direct, then RSS2JSON)
+    items = []
+    
+    # Method 1: WordPress REST API (bypasses Cloudflare, returns full content)
+    log(f"Fetching WP REST API: {WP_API_URL}")
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True,
-                                      headers={"User-Agent": USER_AGENT}) as client:
-            resp = await client.get(RSS_URL)
-            if resp.status_code != 200:
-                log(f"RSS fetch failed: HTTP {resp.status_code}")
-                save_json(existing_articles, articles_file)
-                return
-
-            # Check for Cloudflare challenge
-            if 'Just a moment' in resp.text or 'cloudflare' in resp.text.lower():
-                log("Cloudflare challenge detected! RSS is blocked from this IP.")
-                save_json(existing_articles, articles_file)
-                return
-
-            rss_xml = resp.text
-            log(f"RSS fetched: {len(rss_xml)} bytes")
-
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            resp = await client.get(f"{WP_API_URL}?per_page=10")
+            if resp.status_code == 200:
+                posts = json.loads(resp.text)
+                if isinstance(posts, list):
+                    for p in posts:
+                        title_html = p.get("title", {}).get("rendered", "")
+                        title = re.sub(r'<[^>]+>', '', title_html).strip()
+                        content_html = p.get("content", {}).get("rendered", "")
+                        link = p.get("link", "")
+                        date_str = p.get("date", "")[:10]
+                        items.append({
+                            "title": title,
+                            "link": link,
+                            "date": date_str,
+                            "content_html": content_html,
+                        })
+                    log(f"WP REST API: {len(items)} items fetched")
     except Exception as e:
-        log(f"RSS fetch error: {e}")
-        save_json(existing_articles, articles_file)
-        return
+        log(f"WP REST API error: {e}")
 
-    # Step 2: Parse RSS
-    try:
-        items = parse_rss(rss_xml)
-        log(f"RSS items: {len(items)}")
-    except Exception as e:
-        log(f"RSS parse error: {e}")
+    # Method 2: RSS direct (works locally, may be CF-blocked in CI)
+    if not items:
+        log(f"Trying direct RSS: {RSS_URL}")
+        try:
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True,
+                                          headers={"User-Agent": USER_AGENT}) as client:
+                resp = await client.get(RSS_URL)
+                if resp.status_code == 200 and 'Just a moment' not in resp.text:
+                    items = parse_rss(resp.text)
+                    log(f"RSS direct: {len(items)} items fetched")
+                else:
+                    log(f"RSS direct failed: HTTP {resp.status_code}")
+        except Exception as e:
+            log(f"RSS direct error: {e}")
+
+    # Method 3: RSS2JSON fallback (bypasses CF, but only returns summaries)
+    if not items:
+        rss2json_url = f"{RSS2JSON_URL}?rss_url={RSS_URL}"
+        log(f"Trying RSS2JSON fallback")
+        try:
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True,
+                                          headers={"User-Agent": USER_AGENT}) as client:
+                resp = await client.get(rss2json_url)
+                if resp.status_code == 200:
+                    data = json.loads(resp.text)
+                    if data.get("status") == "ok":
+                        items = parse_rss_json(data)
+                        log(f"RSS2JSON: {len(items)} items fetched (summaries only)")
+                    else:
+                        log(f"RSS2JSON error: {data.get('message', 'unknown')}")
+        except Exception as e:
+            log(f"RSS2JSON error: {e}")
+
+    if not items:
+        log("All fetch methods failed, exiting")
         save_json(existing_articles, articles_file)
         return
 
@@ -220,7 +278,7 @@ async def main():
             if item["content_html"]:
                 content = extract_content(item["content_html"])
 
-            # If RSS content is too short, fetch article page
+            # If RSS content is too short, fetch article page (may also be CF-blocked)
             if len(content) < 200 and item["link"]:
                 log(f"  Fetching article page: {item['link'][:60]}")
                 try:
@@ -228,7 +286,7 @@ async def main():
                     if resp.status_code == 200 and len(resp.text) > 5000:
                         content = extract_content(resp.text)
                     else:
-                        log(f"  Article page failed: HTTP {resp.status_code}, {len(resp.text)} bytes")
+                        log(f"  Article page: HTTP {resp.status_code} (skipping)")
                 except Exception as e:
                     log(f"  Article page error: {e}")
 
