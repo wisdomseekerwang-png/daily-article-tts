@@ -154,13 +154,18 @@ def save_article_to_json(title, source, url, mp3_filename, article_date=None, pu
                 deduped.append(a)
         existing = deduped
 
-        # Dedup by (date, source)
+        # Dedup by (date, source) and (source, title)
         today = article_date or datetime.now().strftime("%Y-%m-%d")
         existing_keys = {(a.get("date", ""), a.get("source", "")) for a in existing}
+        existing_titles = {(a.get("source", ""), a.get("title", "")) for a in existing}
         key = (today, source)
 
         if key in existing_keys:
             log(f"[SKIP] {source} @ {today} already in articles.json")
+            return False
+        title_key = (source, title)
+        if title_key in existing_titles:
+            log(f"[SKIP] {source}: 标题已存在 -> {title[:40]}")
             return False
 
         article = {

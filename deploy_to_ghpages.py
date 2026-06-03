@@ -145,6 +145,7 @@ def main():
         # Merge: add local entries not in remote
         remote_keys = {(a.get("date", ""), a.get("source", "")) for a in remote_entries}
         remote_urls = {a.get("url", "") for a in remote_entries if a.get("url")}
+        remote_titles = {(a.get("source", ""), a.get("title", "")) for a in remote_entries}
         added = 0
         for a in local_entries:
             key = (a.get("date", ""), a.get("source", ""))
@@ -152,10 +153,14 @@ def main():
                 continue
             if a.get("url") and a["url"] in remote_urls:
                 continue
+            title_key = (a.get("source", ""), a.get("title", ""))
+            if title_key in remote_titles:
+                continue
             remote_entries.append(a)
             remote_keys.add(key)
             if a.get("url"):
                 remote_urls.add(a["url"])
+            remote_titles.add(title_key)
             added += 1
         # Always write deduped merged result
         remote_entries.sort(key=lambda x: x.get("date", ""), reverse=True)
