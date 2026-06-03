@@ -908,3 +908,20 @@ main {
 .log-source.qixing { color: var(--qixing); }
 .log-source.boge { color: var(--boge); }
 .log-source.unknown { color: var(--unknown); }
+
+/* Play log cloud sync */
+.playlog-sync-badge {
+    text-align: center;
+    padding: 6px 12px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #6c757d;
+    background: #f0f0f3;
+    border-radius: 8px;
+}
+.playlog-cloud {
+    font-size: 11px;
+    color: #007aff;
+    margin-left: 4px;
+    flex-shrink: 0;
+}

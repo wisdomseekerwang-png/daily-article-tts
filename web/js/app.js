@@ -8,6 +8,12 @@
     const LISTENED_KEY = 'radio_listened';
     const PLAY_LOG_KEY = 'radio_play_log';
     const IP_CACHE_KEY = 'radio_ip_cache';
+
+    // ============== Supabase 后端配置 ==============
+    // 填入你的 Supabase 项目 URL 和 anon key（在 Project Settings > API 中找到）
+    const SUPABASE_URL = '';  // e.g. 'https://xxxxx.supabase.co'
+    const SUPABASE_ANON_KEY = '';  // e.g. 'eyJhbGciOiJIUzI1NiIs...'
+    const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
     const DEFAULT_SLOTS = [
         { enabled: true, hour: 8, minute: 0 },
         { enabled: true, hour: 12, minute: 0 },
@@ -163,9 +169,63 @@
             date: article.date || '',
             audio: article.audio || '',
         };
+
+        // 1. 本地存储（始终保存）
         const logs = getPlayLogs();
-        logs.unshift(entry); // newest first
+        logs.unshift(entry);
         savePlayLogs(logs);
+
+        // 2. 上传到 Supabase（异步，不阻塞播放）
+        if (SUPABASE_ENABLED) {
+            fetch(`${SUPABASE_URL}/rest/v1/play_logs`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Prefer': 'return=minimal',
+                },
+                body: JSON.stringify({
+                    ip: entry.ip,
+                    time: entry.time,
+                    source: entry.source,
+                    title: entry.title,
+                    article_date: entry.date,
+                    audio: entry.audio,
+                }),
+            }).catch(err => {
+                console.warn('[播放日志] Supabase上传失败:', err);
+            });
+        }
+    };
+
+    // 从 Supabase 获取远程播放日志
+    const fetchRemotePlayLogs = async () => {
+        if (!SUPABASE_ENABLED) return [];
+        try {
+            const resp = await fetch(
+                `${SUPABASE_URL}/rest/v1/play_logs?select=ip,time,source,title,article_date,audio&order=time.desc&limit=200`,
+                {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    },
+                }
+            );
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            return (data || []).map(e => ({
+                ip: e.ip || 'unknown',
+                time: e.time ? e.time.replace('T', ' ').substring(0, 19) : '',
+                source: e.source || '',
+                title: e.title || '',
+                date: e.article_date || '',
+                audio: e.audio || '',
+            }));
+        } catch (err) {
+            console.warn('[播放日志] Supabase获取失败:', err);
+            return [];
+        }
     };
 
     // Create today card
@@ -952,32 +1012,65 @@
     const playLogOverlay = document.querySelector('.playlog-overlay');
     const playLogBody = document.getElementById('playlog-body');
 
-    const renderPlayLogs = () => {
-        const logs = getPlayLogs();
-        if (!logs || logs.length === 0) {
+    const renderPlayLogs = async () => {
+        playLogBody.innerHTML = '<p class="loading">加载中...</p>';
+
+        // 获取远程日志
+        const remoteLogs = await fetchRemotePlayLogs();
+        const localLogs = getPlayLogs();
+
+        // 合并去重：以 (ip, time, source, title) 为唯一键
+        const seen = new Set();
+        const merged = [];
+        const addEntry = (e) => {
+            const key = `${e.ip}|${e.time}|${e.source}|${e.title}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                merged.push(e);
+            }
+        };
+        // 远程优先（更完整），本地补充
+        remoteLogs.forEach(addEntry);
+        localLogs.forEach(addEntry);
+
+        // 按时间倒序
+        merged.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+
+        if (merged.length === 0) {
             playLogBody.innerHTML = '<p class="log-empty">暂无播放记录</p>';
             return;
         }
+
+        // 标记数据来源
+        const isRemote = (e) => remoteLogs.some(r => r.ip === e.ip && r.time === e.time && r.source === e.source && r.title === e.title);
+
         // Group by date
         const grouped = {};
-        logs.forEach(e => {
+        merged.forEach(e => {
             const date = (e.time || '').substring(0, 10);
             if (!grouped[date]) grouped[date] = [];
             grouped[date].push(e);
         });
         let html = '';
+        if (SUPABASE_ENABLED) {
+            html += `<div class="playlog-sync-badge">☁️ 已同步 (${remoteLogs.length} 条远程, ${localLogs.length} 条本地)</div>`;
+        } else {
+            html += `<div class="playlog-sync-badge">💾 仅本地存储 (未配置云端同步)</div>`;
+        }
         for (const [date, entries] of Object.entries(grouped)) {
             html += `<div class="log-date">${date}</div>`;
             html += '<div class="log-entries">';
             entries.forEach(e => {
                 const time = (e.time || '').substring(11, 19);
                 const cls = sourceClass(e.source);
+                const remote = isRemote(e);
                 html += `<div class="log-entry">
                     <span class="log-icon">🎧</span>
                     <span class="log-time">${time}</span>
                     <span class="playlog-ip">${e.ip || '?'}</span>
                     <span class="log-source ${cls}">${e.source || '?'}</span>
                     <span class="log-title">${(e.title || '').substring(0, 30)}</span>
+                    ${remote ? '<span class="playlog-cloud">☁</span>' : ''}
                 </div>`;
             });
             html += '</div>';
