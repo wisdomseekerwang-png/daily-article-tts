@@ -95,12 +95,17 @@
     // UTC时间转北京时间字符串 (UTC+8)
     const formatBJTime = (isoString) => {
         try {
-            const d = new Date(isoString);
-            if (isNaN(d.getTime())) return isoString;
+            let s = String(isoString).trim();
+            // 旧 v21 格式 "YYYY-MM-DD HH:MM:SS" 没有时区，但存的是 UTC，需显式加 Z
+            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) {
+                s = s.replace(' ', 'T') + 'Z';
+            }
+            const d = new Date(s);
+            if (isNaN(d.getTime())) return s;
             const bjMs = d.getTime() + 8 * 3600000;
             const b = new Date(bjMs);
             return b.getUTCFullYear() + '-' + String(b.getUTCMonth()+1).padStart(2,'0') + '-' + String(b.getUTCDate()).padStart(2,'0') + ' ' + String(b.getUTCHours()).padStart(2,'0') + ':' + String(b.getUTCMinutes()).padStart(2,'0') + ':' + String(b.getUTCSeconds()).padStart(2,'0');
-        } catch(e) { return isoString; }
+        } catch(e) { return String(isoString); }
     };
 
     const getToday = () => {
