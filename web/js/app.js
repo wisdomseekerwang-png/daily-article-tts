@@ -92,6 +92,17 @@
         return `${month}月${day}日 周${weekdays[d.getDay()]}`;
     };
 
+    // UTC时间转北京时间字符串 (UTC+8)
+    const formatBJTime = (isoString) => {
+        try {
+            const d = new Date(isoString);
+            if (isNaN(d.getTime())) return isoString;
+            const bjMs = d.getTime() + 8 * 3600000;
+            const b = new Date(bjMs);
+            return b.getUTCFullYear() + '-' + String(b.getUTCMonth()+1).padStart(2,'0') + '-' + String(b.getUTCDate()).padStart(2,'0') + ' ' + String(b.getUTCHours()).padStart(2,'0') + ':' + String(b.getUTCMinutes()).padStart(2,'0') + ':' + String(b.getUTCSeconds()).padStart(2,'0');
+        } catch(e) { return isoString; }
+    };
+
     const getToday = () => {
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -156,10 +167,7 @@
     const addPlayLog = async (article) => {
         if (!article || !article.audio) return;
         const ip = await getVisitorIP();
-        const now = new Date();
-        const bjOffset = 8 * 3600000;
-        const bjTime = new Date(now.getTime() + now.getTimezoneOffset() * 60000 + bjOffset);
-        const timestamp = bjTime.toISOString().replace('T', ' ').substring(0, 19);
+        const timestamp = new Date().toISOString();
 
         // 仅上传到 Supabase（异步，不阻塞播放）
         if (supabase) {
@@ -197,7 +205,7 @@
             if (error) throw error;
             return (data || []).map(e => ({
                 ip: e.ip || 'unknown',
-                time: e.time ? e.time.replace('T', ' ').substring(0, 19) : '',
+                time: e.time ? formatBJTime(e.time) : '',
                 source: e.source || '',
                 title: e.title || '',
                 date: e.article_date || '',
