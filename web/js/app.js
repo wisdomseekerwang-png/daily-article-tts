@@ -234,6 +234,24 @@
         }
     };
 
+    // 从 Supabase 播放日志同步已听状态到 localStorage
+    const syncListenedFromCloud = async () => {
+        const logs = await fetchRemotePlayLogs();
+        if (logs.length === 0) return;
+        const set = getListenedSet();
+        let changed = false;
+        logs.forEach(e => {
+            if (e.audio && !set.has(e.audio)) {
+                set.add(e.audio);
+                changed = true;
+            }
+        });
+        if (changed) {
+            saveListenedSet(set);
+            console.log('[已听同步] 从云端同步了新已听记录');
+        }
+    };
+
     // Create today card
     const createTodayCard = (article) => {
         const cls = sourceClass(article.source);
@@ -944,6 +962,8 @@
             render();
             // Start schedule after data loaded
             startSchedule();
+            // Sync listened state from Supabase (async, re-render when done)
+            syncListenedFromCloud().then(() => render());
         })
         .catch(() => {
             articleList.innerHTML = '<p class="loading">数据加载失败，请刷新重试</p>';
