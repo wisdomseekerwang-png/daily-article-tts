@@ -171,6 +171,13 @@
 
     const addPlayLog = async (article) => {
         if (!article || !article.audio) return;
+
+        // 点播放就标记已听（不需要等播完）
+        if (!isListened(article)) {
+            markListened(article);
+            render();
+        }
+
         const ip = await getVisitorIP();
         const timestamp = new Date().toISOString();
 
@@ -186,14 +193,18 @@
             }]).then(({ data, error }) => {
                 if (error) {
                     console.warn('[播放日志] Supabase上传失败:', error.message, error.code);
+                    lastRemoteError = '上传失败: ' + error.message;
                 } else {
-                    console.log('[播放日志] Supabase上传成功');
+                    console.log('[播放日志] Supabase上传成功', data);
+                    lastRemoteError = '';
                 }
             });
         } else if (supabaseInitError) {
             console.warn('[播放日志] Supabase未初始化:', supabaseInitError);
+            lastRemoteError = 'Supabase未初始化: ' + supabaseInitError;
         } else {
             console.warn('[播放日志] 无可用存储后端');
+            lastRemoteError = '无可用存储后端';
         }
     };
 
