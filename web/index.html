@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>早报电台 - 公众号文章语音</title>
-    <link rel="stylesheet" href="css/style.css?v=26">
+    <link rel="stylesheet" href="css/style.css?v=27">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
 </head>
 <body>
@@ -117,8 +117,13 @@
             <div id="today-cards" class="today-cards"></div>
         </section>
 
+        <section id="backlog-section" class="today-section" style="display:none">
+            <h2>往日早报</h2>
+            <div id="backlog-cards" class="today-cards"></div>
+        </section>
+
         <section class="history-section">
-            <h2>历史早报</h2>
+            <h2>已听</h2>
             <div id="article-list" class="article-list">
                 <p class="loading">加载中...</p>
             </div>
@@ -275,6 +280,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="js/app.js?v=26"></script>
+    <script src="js/app.js?v=27"></script>
 </body>
 </html>

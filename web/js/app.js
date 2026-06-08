@@ -41,6 +41,8 @@
     // DOM Elements
     const todaySection = document.getElementById('today-section');
     const todayCards = document.getElementById('today-cards');
+    const backlogSection = document.getElementById('backlog-section');
+    const backlogCards = document.getElementById('backlog-cards');
     const articleList = document.getElementById('article-list');
     const player = document.getElementById('player');
     const playerSource = document.getElementById('player-source');
@@ -306,6 +308,7 @@
     // Render
     const render = () => {
         todayCards.innerHTML = '';
+        backlogCards.innerHTML = '';
         articleList.innerHTML = '';
 
         if (!articles.length) {
@@ -314,9 +317,13 @@
         }
 
         const today = getToday();
-        // Split: today unlistened → today section; listened → history (unlistened hidden)
+        // Split into 3 groups:
+        // 1. Today unlistened → 今日早报
+        // 2. Older unlistened → 往日早报
+        // 3. Listened → 已听
         const todayUnlistened = articles.filter(a => a.date === today && !isListened(a));
-        const historyArticles = articles.filter(a => isListened(a));
+        const backlogUnlistened = articles.filter(a => a.date !== today && !isListened(a));
+        const listenedArticles = articles.filter(a => isListened(a));
 
         // Today (only unlistened)
         if (todayUnlistened.length > 0) {
@@ -326,10 +333,18 @@
             todaySection.style.display = 'none';
         }
 
-        // History (listened today + older articles)
-        if (historyArticles.length > 0) {
-            historyArticles.forEach(a => articleList.appendChild(createHistoryCard(a)));
-        } else if (todayUnlistened.length === 0) {
+        // Backlog (older unlistened)
+        if (backlogUnlistened.length > 0) {
+            backlogSection.style.display = 'block';
+            backlogUnlistened.forEach(a => backlogCards.appendChild(createTodayCard(a)));
+        } else {
+            backlogSection.style.display = 'none';
+        }
+
+        // Listened
+        if (listenedArticles.length > 0) {
+            listenedArticles.forEach(a => articleList.appendChild(createHistoryCard(a)));
+        } else if (todayUnlistened.length === 0 && backlogUnlistened.length === 0) {
             articleList.innerHTML = '<p class="loading">暂无文章，请等待自动抓取...</p>';
         }
     };
