@@ -285,9 +285,9 @@
         }
 
         const today = getToday();
-        // Split: today unlistened → today section; listened + older → history
+        // Split: today unlistened → today section; listened → history (unlistened hidden)
         const todayUnlistened = articles.filter(a => a.date === today && !isListened(a));
-        const historyArticles = articles.filter(a => a.date !== today || isListened(a));
+        const historyArticles = articles.filter(a => isListened(a));
 
         // Today (only unlistened)
         if (todayUnlistened.length > 0) {
