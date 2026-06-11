@@ -171,6 +171,12 @@ def main():
             remote_titles.add(title_key)
             added += 1
         # Always write deduped merged result
+        # Prune entries older than 7 days
+        from datetime import datetime, timedelta
+        week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        before_prune = len(remote_entries)
+        remote_entries = [a for a in remote_entries if a.get("date", "") >= week_ago]
+        pruned = before_prune - len(remote_entries)
         remote_entries.sort(key=lambda x: x.get("date", ""), reverse=True)
         with open(remote_articles, "w", encoding="utf-8") as f:
             json.dump(remote_entries, f, ensure_ascii=False, indent=2)
@@ -178,14 +184,26 @@ def main():
         result = run_git(["git", "diff", "--cached", "--quiet"], cwd=TEMP_CLONE_DIR, check=False)
         if result.returncode != 0:
             changes = True
-            print(f"  Merged articles.json: {added} new entries (total {len(remote_entries)})")
+            prune_msg = f", pruned {pruned} old" if pruned > 0 else ""
+            print(f"  Merged articles.json: {added} new entries (total {len(remote_entries)}{prune_msg})")
         else:
             run_git(["git", "reset", "HEAD", "data/articles.json"], cwd=TEMP_CLONE_DIR)
             print("  No changes: data/articles.json")
     else:
         print("  Skip: articles.json not found locally")
 
-    # Step 3: Copy new MP3 files
+    # Step 3: Copy new MP3 files & remove orphaned MP3s
+    # Build set of referenced audio filenames from articles
+    referenced_audio = set()
+    if remote_articles.exists():
+        try:
+            with open(remote_articles, "r", encoding="utf-8") as f:
+                for a in json.load(f):
+                    if a.get("audio"):
+                        referenced_audio.add(a["audio"])
+        except Exception:
+            pass
+
     if LOCAL_AUDIO_DIR.exists():
         REMOTE_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
         existing_remote = set(f.name for f in REMOTE_AUDIO_DIR.glob("*.mp3"))
@@ -201,6 +219,18 @@ def main():
             print("  No new audio files")
     else:
         print("  Skip: no local audio/ directory")
+
+    # Remove orphaned MP3 files (not referenced by any article)
+    if REMOTE_AUDIO_DIR.exists() and referenced_audio:
+        orphans = 0
+        for mp3 in REMOTE_AUDIO_DIR.glob("*.mp3"):
+            if mp3.name not in referenced_audio:
+                mp3.unlink()
+                orphans += 1
+                changes = True
+        if orphans > 0:
+            run_git(["git", "add", "audio/"], cwd=TEMP_CLONE_DIR)
+            print(f"  Removed {orphans} orphaned MP3 files")
 
     # Step 4: Merge tts_run_log.json
     local_log = LOCAL_DATA_DIR / "tts_run_log.json"
