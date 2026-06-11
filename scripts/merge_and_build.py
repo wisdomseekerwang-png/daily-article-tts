@@ -2,6 +2,7 @@
 import json
 import os
 import shutil
+from datetime import datetime, timedelta
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
@@ -66,24 +67,42 @@ def main():
     # Sort by date descending
     existing.sort(key=lambda x: x["date"], reverse=True)
 
-    print(f"Articles: {len(existing)} total, {added} new, {skipped} skipped (dedup)")
+    # Prune articles older than 7 days
+    week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    before_prune = len(existing)
+    existing = [a for a in existing if a.get("date", "") >= week_ago]
+    pruned = before_prune - len(existing)
+    prune_msg = f", {pruned} pruned (>7d)" if pruned > 0 else ""
+
+    print(f"Articles: {len(existing)} total, {added} new, {skipped} skipped (dedup){prune_msg}")
 
     # Write merged articles.json
     merged_path = os.path.join(DIST_DIR, "data", "articles.json")
     with open(merged_path, "w", encoding="utf-8") as f:
         json.dump(existing, f, ensure_ascii=False, indent=2)
 
-    # Copy MP3 files to dist
+    # Copy MP3 files to dist (only referenced by articles)
+    referenced_audio = {a.get("audio", "") for a in existing if a.get("audio")}
     if os.path.isdir(audio_dir):
         count = 0
         for fname in os.listdir(audio_dir):
-            if fname.endswith(".mp3"):
+            if fname.endswith(".mp3") and fname in referenced_audio:
                 src = os.path.join(audio_dir, fname)
                 dst = os.path.join(dist_audio, fname)
                 if not os.path.exists(dst):
                     shutil.copy2(src, dst)
                     count += 1
         print(f"Audio: {count} new files copied")
+
+    # Remove orphaned MP3s from dist (not referenced by any article)
+    if os.path.isdir(dist_audio):
+        orphans = 0
+        for fname in os.listdir(dist_audio):
+            if fname.endswith(".mp3") and fname not in referenced_audio:
+                os.remove(os.path.join(dist_audio, fname))
+                orphans += 1
+        if orphans > 0:
+            print(f"Audio: {orphans} orphaned MP3s removed")
 
     # Copy web assets
     web_dir = os.path.join(BASE_DIR, "web")
