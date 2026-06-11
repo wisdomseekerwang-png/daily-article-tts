@@ -317,13 +317,19 @@
         }
 
         const today = getToday();
+        // Only show articles within last 7 days
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        const weekAgoStr = `${weekAgo.getFullYear()}-${String(weekAgo.getMonth()+1).padStart(2,'0')}-${String(weekAgo.getDate()).padStart(2,'0')}`;
+        const recentArticles = articles.filter(a => a.date >= weekAgoStr);
+
         // Split into 3 groups:
         // 1. Today unlistened → 今日早报
         // 2. Older unlistened → 往日早报
         // 3. Listened → 已听
-        const todayUnlistened = articles.filter(a => a.date === today && !isListened(a));
-        const backlogUnlistened = articles.filter(a => a.date !== today && !isListened(a));
-        const listenedArticles = articles.filter(a => isListened(a));
+        const todayUnlistened = recentArticles.filter(a => a.date === today && !isListened(a));
+        const backlogUnlistened = recentArticles.filter(a => a.date !== today && !isListened(a));
+        const listenedArticles = recentArticles.filter(a => isListened(a));
 
         // Today (only unlistened)
         if (todayUnlistened.length > 0) {
