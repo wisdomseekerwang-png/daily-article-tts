@@ -38,18 +38,9 @@ NOTIFICATION_FILE = os.path.join(WORKSPACE_DIR, "daily_article_notification.md")
 ARTICLES_JSON = os.path.join(WORKSPACE_DIR, "web", "data", "articles.json")
 WECHAT_SEARCH_SCRIPT = r"C:\Users\yuhaoxiong\.workbuddy\skills\wechat-article-search\scripts\search_wechat.js"
 
-# 文章源配置
+# 文章源配置 — 仅保留猫笔刀（其余已暂停，见作业备忘录 2026-06-22）
 SOURCES = [
     {"name": "猫笔刀", "search_query": "猫笔刀"},
-    {"name": "刘备教授", "search_query": "刘备教授"},
-    {"name": "孥孥的大树", "search_query": "孥孥的大树"},
-    {"name": "卢克文工作室", "search_query": "卢克文工作室"},
-    {"name": "海里的小龙龙", "search_query": "海里的小龙龙"},
-    {"name": "远方青木", "search_query": "远方青木"},
-    {"name": "格兰投研", "search_query": "格兰投研"},
-    {"name": "价值事务所", "search_query": "价值事务所"},
-    {"name": "棋行者", "search_query": "棋行者"},
-    {"name": "伯格医生", "search_query": "伯格医生"},
 ]
 
 # ============== 全局模式 ==============
@@ -262,9 +253,6 @@ async def fetch_article_content(url: str) -> str:
         # If direct fetch failed, try extracting from RSS
         log("[INFO] maobidao direct fetch failed, trying RSS content...")
         return await fetch_maobidao_rss()
-    # 刘备教授用 fugay.com
-    if "fugay" in url:
-        return await fetch_fugay(url)
     # Sogou redirect URL — follow redirect to get actual mp.weixin.qq.com URL
     if "weixin.sogou.com" in url:
         log("[INFO] Following sogou redirect...")
@@ -409,32 +397,6 @@ async def fetch_maobidao(url: str) -> str:
     return ""
 
 
-async def fetch_fugay(url: str) -> str:
-    """抓取刘备教授文章（fugay.com）"""
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-            html = resp.text
-            
-            # 提取 <p> 标签
-            paragraphs = re.findall(r'<p[^>]*>(.*?)</p>', html, re.DOTALL)
-            text_parts = []
-            for p in paragraphs:
-                t = clean_article_text(p)
-                if len(t) > 15:
-                    text_parts.append(t)
-            
-            if text_parts:
-                return ' '.join(text_parts)
-            
-            chinese = re.findall(r'[\u4e00-\u9fff][^\n<]{10,}', html)
-            text_parts = [clean_article_text(c) for c in chinese if len(c) > 15][:30]
-            return ' '.join(text_parts)
-    except Exception as e:
-        log(f"[ERROR] fugay fetch failed: {e}")
-        return ""
-
-
 async def text_to_speech(text: str, output_path: str, source_name: str, article_title: str) -> bool:
     """将文本转为MP3"""
     if not text or len(text) < 50:
@@ -525,72 +487,25 @@ async def get_maobidao_latest() -> dict:
     return await search_sogou_maobidao()
 
 
-async def get_fugay_latest() -> dict:
-    """尝试抓取刘备教授最近7天的文章，找到有内容的那篇"""
-    from datetime import datetime, timedelta
-    today = datetime.now()
-    
-    for days_ago in range(8):  # 0-7天前
-        date = today - timedelta(days=days_ago)
-        url = date.strftime(f"https://www.fugay.com/%Y/%m/%d-lbjs/")
-        try:
-            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-                resp = await client.get(url)
-                if resp.status_code == 200 and len(resp.text) > 5000:
-                    html = resp.text
-                    # 从 <title> 标签提取标题
-                    m = re.search(r'<title>([^<]+)\s*\|\s*刘备教授', html)
-                    if m:
-                        title = m.group(1).strip()
-                    else:
-                        title = f"刘备教授·{date.strftime('%Y-%m-%d')}"
-                    # Try to extract publish time from HTML
-                    publish_time = ""
-                    time_m = re.search(r'<time[^>]*datetime="([^"]+)"', html)
-                    if time_m:
-                        publish_time = time_m.group(1)
-                    else:
-                        time_m = re.search(r'发表于\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})', html)
-                        if time_m:
-                            publish_time = time_m.group(1).replace(' ', 'T')
-                    return {
-                        "title": title,
-                        "url": url,
-                        "datetime": date.strftime("%Y-%m-%d"),
-                        "publish_time": publish_time,
-                    }
-        except Exception:
-            pass
-    return {}
-
 
 async def process_source(source: dict) -> dict:
     """处理单个文章来源"""
     name = source["name"]
     log(f"[INFO] === 正在抓取 {name} 的最新文章 ===")
-    
+
     article_info = {}
-    
+
     # 猫笔刀：直接解析主页（自动 fallback 到 RSS/搜狗）
     if name == "猫笔刀":
         article_info = await get_maobidao_latest()
-    # 刘备教授：主页+搜索脚本
-    elif name == "刘备教授":
-        # 先尝试直接抓取最近文章（最可靠）
-        article_info = await get_fugay_latest()
-        log(f"[INFO] {name}: 从存档找到《{article_info.get('title','')}》")
     else:
-        # 其他公众号：通过搜狗搜索获取最新文章
-        log(f"[INFO] {name}: 通过搜狗微信搜索...")
-        article_info = await search_latest_article(name, source["search_query"])
-        if article_info:
-            log(f"[INFO] {name}: 搜索到《{article_info.get('title','')}》")
-    
+        log(f"[WARN] 未知来源: {name}，跳过")
+        return {"name": name, "success": False, "reason": "来源未配置"}
+
     if not article_info or not article_info.get("url"):
         # 备用已知URL
         fallbacks = {
             "猫笔刀": {"title": "瞬间恶念", "url": "https://maobidao.cn/maobidao/parent-child-sports-day-xiaomi-report-618-deals/"},
-            "刘备教授": {"title": "给芯片开个挂...", "url": "https://www.fugay.com/2026/05/26-lbjs/"},
         }
         article_info = fallbacks.get(name, {})
         if article_info:
