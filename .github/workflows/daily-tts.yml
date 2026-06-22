@@ -1,9 +1,11 @@
-name: Daily Article TTS
+name: Daily Article TTS (PAUSED - 2026-06-22)
+
+# CI 已暂停，仅保留 manual trigger。需要恢复时删除此行并取消注释下方 schedule。
+# 原因：本地自动化已覆盖猫笔刀+龙哥白话堂，其余公众号暂停。
 
 on:
-  schedule:
-    # Every hour (UTC) = every hour (HK UTC+8)
-    - cron: '0 * * * *'
+  # schedule:
+  #   - cron: '0 * * * *'
   workflow_dispatch:
 
 permissions:
