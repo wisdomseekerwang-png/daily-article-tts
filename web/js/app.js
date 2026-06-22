@@ -72,6 +72,9 @@
         return 'unknown';
     };
 
+    // Active sources: only these appear in 今日早报 / 往日早报
+    const ACTIVE_SOURCES = ['猫笔刀', '龙哥白话堂'];
+
     const formatDuration = (sec) => {
         if (!sec || !isFinite(sec)) return '0:00';
         const m = Math.floor(sec / 60);
@@ -134,9 +137,10 @@
         return article && article.audio && getListenedSet().has(article.audio);
     };
     // Find next unlistened article starting from given index, wraps around
+    // Only consider active sources
     const findNextUnlistened = (startFrom) => {
         for (let i = startFrom; i < articles.length; i++) {
-            if (!isListened(articles[i])) return i;
+            if (!isListened(articles[i]) && ACTIVE_SOURCES.some(s => articles[i].source && articles[i].source.includes(s))) return i;
         }
         return -1; // all remaining are listened
     };
@@ -283,7 +287,9 @@
     // Create history card
     const createHistoryCard = (article) => {
         const cls = sourceClass(article.source);
-        const listened = isListened(article);
+        // 非活跃来源始终显示为已听状态
+        const fromActive = ACTIVE_SOURCES.some(s => article.source && article.source.includes(s));
+        const listened = !fromActive || isListened(article);
         const card = document.createElement('div');
         card.className = 'history-card' + (listened ? ' listened' : '');
         const idx = articles.indexOf(article);
@@ -324,12 +330,23 @@
         const recentArticles = articles.filter(a => a.date >= weekAgoStr);
 
         // Split into 3 groups:
-        // 1. Today unlistened → 今日早报
-        // 2. Older unlistened → 往日早报
-        // 3. Listened → 已听
-        const todayUnlistened = recentArticles.filter(a => a.date === today && !isListened(a));
-        const backlogUnlistened = recentArticles.filter(a => a.date !== today && !isListened(a));
-        const listenedArticles = recentArticles.filter(a => isListened(a));
+        // 1. Today unlistened (active sources only) → 今日早报
+        // 2. Older unlistened (active sources only) → 往日早报
+        // 3. Listened (active sources) + all inactive source articles → 已听
+        const todayUnlistened = recentArticles.filter(a =>
+            a.date === today && !isListened(a) && ACTIVE_SOURCES.some(s => a.source && a.source.includes(s))
+        );
+        const backlogUnlistened = recentArticles.filter(a =>
+            a.date !== today && !isListened(a) && ACTIVE_SOURCES.some(s => a.source && a.source.includes(s))
+        );
+        // 已听：活跃来源的已听文章 + 所有非活跃来源的文章
+        const listenedActive = recentArticles.filter(a =>
+            ACTIVE_SOURCES.some(s => a.source && a.source.includes(s)) && isListened(a)
+        );
+        const inactiveAll = recentArticles.filter(a =>
+            !ACTIVE_SOURCES.some(s => a.source && a.source.includes(s))
+        );
+        const listenedArticles = [...listenedActive, ...inactiveAll];
 
         // Today (only unlistened)
         if (todayUnlistened.length > 0) {
