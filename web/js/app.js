@@ -50,6 +50,8 @@
     const btnPlay = document.getElementById('btn-play');
     const btnPrev = document.getElementById('btn-prev');
     const btnNext = document.getElementById('btn-next');
+    const btnRewind = document.getElementById('btn-rewind');
+    const btnForward = document.getElementById('btn-forward');
     const progressBar = document.getElementById('progress-bar');
     const timeCurrent = document.getElementById('time-current');
     const timeTotal = document.getElementById('time-total');
@@ -418,6 +420,16 @@
 
     btnPrev.addEventListener('click', playPrev);
     btnNext.addEventListener('click', playNext);
+
+    btnRewind.addEventListener('click', () => {
+        if (currentIndex < 0) return;
+        audio.currentTime = Math.max(0, audio.currentTime - 15);
+    });
+
+    btnForward.addEventListener('click', () => {
+        if (currentIndex < 0 || !isFinite(audio.duration)) return;
+        audio.currentTime = Math.min(audio.duration, audio.currentTime + 15);
+    });
 
     audio.addEventListener('timeupdate', () => {
         if (!audio.duration) return;
