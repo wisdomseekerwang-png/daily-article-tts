@@ -325,11 +325,11 @@
         }
 
         const today = getToday();
-        // Only show articles within last 7 days
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        const weekAgoStr = `${weekAgo.getFullYear()}-${String(weekAgo.getMonth()+1).padStart(2,'0')}-${String(weekAgo.getDate()).padStart(2,'0')}`;
-        const recentArticles = articles.filter(a => a.date >= weekAgoStr);
+        // Only show articles within last 6 months (180 days)
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 180);
+        const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth()+1).padStart(2,'0')}-${String(cutoff.getDate()).padStart(2,'0')}`;
+        const recentArticles = articles.filter(a => a.date >= cutoffStr);
 
         // Split into 3 groups:
         // 1. Today unlistened (active sources only) → 今日早报
@@ -366,9 +366,50 @@
             backlogSection.style.display = 'none';
         }
 
-        // Listened
+        // Listened — group by month with collapsible sections
         if (listenedArticles.length > 0) {
-            listenedArticles.forEach(a => articleList.appendChild(createHistoryCard(a)));
+            // Group by YYYY-MM
+            const monthGroups = {};
+            listenedArticles.forEach(a => {
+                const ym = (a.date || '').substring(0, 7); // "YYYY-MM"
+                if (!monthGroups[ym]) monthGroups[ym] = [];
+                monthGroups[ym].push(a);
+            });
+            // Sort months descending
+            const sortedMonths = Object.keys(monthGroups).sort().reverse();
+
+            sortedMonths.forEach(ym => {
+                const articlesInMonth = monthGroups[ym];
+                const [y, m] = ym.split('-');
+                const monthLabel = `${y}年${parseInt(m)}月`;
+
+                const group = document.createElement('div');
+                group.className = 'month-group';
+
+                const header = document.createElement('div');
+                header.className = 'month-header';
+                // Default: most recent month expanded, others collapsed
+                const isLatest = ym === sortedMonths[0];
+                if (isLatest) group.classList.add('expanded');
+                header.innerHTML = `
+                    <span class="month-arrow">${isLatest ? '▼' : '▶'}</span>
+                    <span class="month-label">${monthLabel}</span>
+                    <span class="month-count">${articlesInMonth.length}篇</span>
+                `;
+                header.onclick = () => {
+                    group.classList.toggle('expanded');
+                    const arrow = header.querySelector('.month-arrow');
+                    arrow.textContent = group.classList.contains('expanded') ? '▼' : '▶';
+                };
+
+                const content = document.createElement('div');
+                content.className = 'month-content';
+                articlesInMonth.forEach(a => content.appendChild(createHistoryCard(a)));
+
+                group.appendChild(header);
+                group.appendChild(content);
+                articleList.appendChild(group);
+            });
         } else if (todayUnlistened.length === 0 && backlogUnlistened.length === 0) {
             articleList.innerHTML = '<p class="loading">暂无文章，请等待自动抓取...</p>';
         }

@@ -67,12 +67,12 @@ def main():
     # Sort by date descending
     existing.sort(key=lambda x: x["date"], reverse=True)
 
-    # Prune articles older than 7 days
-    week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    # Prune articles older than 6 months (180 days)
+    half_year_ago = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
     before_prune = len(existing)
-    existing = [a for a in existing if a.get("date", "") >= week_ago]
+    existing = [a for a in existing if a.get("date", "") >= half_year_ago]
     pruned = before_prune - len(existing)
-    prune_msg = f", {pruned} pruned (>7d)" if pruned > 0 else ""
+    prune_msg = f", {pruned} pruned (>180d)" if pruned > 0 else ""
 
     print(f"Articles: {len(existing)} total, {added} new, {skipped} skipped (dedup){prune_msg}")
 

@@ -170,7 +170,50 @@ main {
 }
 .btn-mark-listened:hover { background: #e8f5e9; color: #43a047; border-color: #43a047; }
 
-/* History List */
+/* History List — Monthly collapsible groups */
+.month-group {
+    margin-bottom: 4px;
+}
+.month-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #f0f0f5;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+}
+.month-header:hover { background: #e5e5ea; }
+.month-arrow {
+    font-size: 10px;
+    color: var(--text-secondary);
+    width: 14px;
+    text-align: center;
+    transition: transform 0.2s;
+}
+.month-group.expanded .month-arrow { /* handled by JS */ }
+.month-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+}
+.month-count {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-left: auto;
+}
+.month-content {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 0 12px 0;
+}
+.month-group.expanded .month-content {
+    display: flex;
+}
+
 .article-list {
     display: flex;
     flex-direction: column;

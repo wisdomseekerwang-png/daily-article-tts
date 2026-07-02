@@ -135,8 +135,16 @@ def main():
         # Read remote (if exists) and merge
         remote_entries = []
         if remote_articles.exists():
-            with open(remote_articles, "r", encoding="utf-8") as f:
-                remote_entries = json.load(f)
+            try:
+                with open(remote_articles, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        remote_entries = json.loads(content)
+                    else:
+                        remote_entries = []
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"  [WARN] Remote articles.json corrupted, starting fresh: {e}")
+                remote_entries = []
             # Pre-dedup remote by (date, source) + (source, title)
             seen_remote = set()
             seen_remote_titles = set()
@@ -171,11 +179,11 @@ def main():
             remote_titles.add(title_key)
             added += 1
         # Always write deduped merged result
-        # Prune entries older than 7 days
+        # Prune entries older than 6 months (180 days)
         from datetime import datetime, timedelta
-        week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        half_year_ago = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
         before_prune = len(remote_entries)
-        remote_entries = [a for a in remote_entries if a.get("date", "") >= week_ago]
+        remote_entries = [a for a in remote_entries if a.get("date", "") >= half_year_ago]
         pruned = before_prune - len(remote_entries)
         remote_entries.sort(key=lambda x: x.get("date", ""), reverse=True)
         with open(remote_articles, "w", encoding="utf-8") as f:
@@ -239,8 +247,16 @@ def main():
         REMOTE_DATA_DIR.mkdir(parents=True, exist_ok=True)
         remote_entries = []
         if remote_log.exists():
-            with open(remote_log, "r", encoding="utf-8") as f:
-                remote_entries = json.load(f)
+            try:
+                with open(remote_log, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        remote_entries = json.loads(content)
+                    else:
+                        remote_entries = []
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"  [WARN] Remote tts_run_log.json corrupted, starting fresh: {e}")
+                remote_entries = []
         with open(local_log, "r", encoding="utf-8") as f:
             local_entries = json.load(f)
         remote_keys = {(e.get("timestamp", ""), e.get("source", "")) for e in remote_entries}
