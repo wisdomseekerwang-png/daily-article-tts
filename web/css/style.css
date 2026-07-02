@@ -205,17 +205,24 @@ main {
 }
 .btn-month-play {
     margin-left: auto;
-    padding: 4px 10px;
-    font-size: 12px;
-    background: var(--primary);
+    padding: 5px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #ff6b35, #ff3366);
     color: #fff;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
     white-space: nowrap;
-    transition: opacity 0.15s;
+    box-shadow: 0 2px 8px rgba(255, 51, 102, 0.35);
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
 }
-.btn-month-play:hover { opacity: 0.85; }
+.btn-month-play:hover {
+    opacity: 1;
+    box-shadow: 0 4px 14px rgba(255, 51, 102, 0.5);
+    transform: translateY(-1px);
+}
 .month-content {
     display: none;
     flex-direction: column;
