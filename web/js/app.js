@@ -358,10 +358,50 @@
             todaySection.style.display = 'none';
         }
 
-        // Backlog (older unlistened)
+        // Backlog (older unlistened) — group by month with collapsible sections
         if (backlogUnlistened.length > 0) {
             backlogSection.style.display = 'block';
-            backlogUnlistened.forEach(a => backlogCards.appendChild(createTodayCard(a)));
+            // Group by YYYY-MM
+            const blMonthGroups = {};
+            backlogUnlistened.forEach(a => {
+                const ym = (a.date || '').substring(0, 7);
+                if (!blMonthGroups[ym]) blMonthGroups[ym] = [];
+                blMonthGroups[ym].push(a);
+            });
+            const blSortedMonths = Object.keys(blMonthGroups).sort().reverse();
+
+            blSortedMonths.forEach(ym => {
+                const articlesInMonth = blMonthGroups[ym];
+                const [y, m] = ym.split('-');
+                const monthLabel = `${y}年${parseInt(m)}月`;
+
+                const group = document.createElement('div');
+                group.className = 'month-group';
+                const isLatest = ym === blSortedMonths[0];
+                if (isLatest) group.classList.add('expanded');
+
+                const header = document.createElement('div');
+                header.className = 'month-header';
+                header.innerHTML = `
+                    <span class="month-arrow">${isLatest ? '▼' : '▶'}</span>
+                    <span class="month-label">${monthLabel}</span>
+                    <span class="month-count">${articlesInMonth.length}篇</span>
+                    <button class="btn-month-play" onclick="event.stopPropagation();app.playMonth('${ym}')" title="播放本月所有文章">▶ 播放本月</button>
+                `;
+                header.onclick = () => {
+                    group.classList.toggle('expanded');
+                    const arrow = header.querySelector('.month-arrow');
+                    arrow.textContent = group.classList.contains('expanded') ? '▼' : '▶';
+                };
+
+                const content = document.createElement('div');
+                content.className = 'month-content';
+                articlesInMonth.forEach(a => content.appendChild(createTodayCard(a)));
+
+                group.appendChild(header);
+                group.appendChild(content);
+                backlogCards.appendChild(group);
+            });
         } else {
             backlogSection.style.display = 'none';
         }
@@ -395,6 +435,7 @@
                     <span class="month-arrow">${isLatest ? '▼' : '▶'}</span>
                     <span class="month-label">${monthLabel}</span>
                     <span class="month-count">${articlesInMonth.length}篇</span>
+                    <button class="btn-month-play" onclick="event.stopPropagation();app.playMonth('${ym}')" title="播放本月所有文章">▶ 播放本月</button>
                 `;
                 header.onclick = () => {
                     group.classList.toggle('expanded');
@@ -488,6 +529,22 @@
         // Mark current article as listened
         if (currentIndex >= 0 && articles[currentIndex]) {
             markListened(articles[currentIndex]);
+        }
+        // Month play: advance to next article in the month list
+        if (monthPlayList && monthPlayList.length > 0) {
+            monthPlayPos++;
+            if (monthPlayPos < monthPlayList.length) {
+                const nextIdx = articles.indexOf(monthPlayList[monthPlayPos]);
+                if (nextIdx >= 0) {
+                    render();
+                    showPlayer(nextIdx);
+                }
+            } else {
+                showAlarm(`${monthPlayLabel} 播放完毕`);
+                stopMonthPlay();
+                render();
+            }
+            return;
         }
         if (isPlayAll) {
             render(); // Re-render to move listened article to history
@@ -828,8 +885,39 @@
     // ============== 连播全部 ==============
     let isPlayAll = false;
 
+    // ============== 按月播放 ==============
+    let monthPlayList = null;   // Array of article objects for current month play
+    let monthPlayPos = 0;
+    let monthPlayLabel = '';    // For display in alarm
+
+    const playMonth = (ym) => {
+        // Stop any ongoing play-all
+        if (isPlayAll) stopPlayAll();
+        // Build list from active source articles matching this month
+        monthPlayList = articles.filter(a =>
+            (a.date || '').startsWith(ym) &&
+            ACTIVE_SOURCES.some(s => a.source && a.source.includes(s))
+        );
+        if (monthPlayList.length === 0) {
+            showAlarm('本月暂无文章');
+            return;
+        }
+        monthPlayPos = 0;
+        const [y, m] = ym.split('-');
+        monthPlayLabel = `${y}年${parseInt(m)}月`;
+        showPlayer(articles.indexOf(monthPlayList[0]));
+        showAlarm(`开始播放${monthPlayLabel}，共 ${monthPlayList.length} 篇...`);
+    };
+
+    const stopMonthPlay = () => {
+        monthPlayList = null;
+        monthPlayPos = 0;
+        monthPlayLabel = '';
+    };
+
     const playAllArticles = () => {
         if (articles.length === 0) return;
+        stopMonthPlay(); // Cancel any month play
         isPlayAll = true;
         showPlayer(0);
         btnPlayAll.classList.add('playing');
@@ -839,6 +927,7 @@
 
     const stopPlayAll = () => {
         isPlayAll = false;
+        stopMonthPlay();
         audio.pause();
         audio.currentTime = 0;
         btnPlayAll.classList.remove('playing');
@@ -1061,7 +1150,7 @@
         });
 
     // Expose to global
-    window.app = { play: showPlayer, markListened: (idx) => { markListened(articles[idx]); render(); } };
+    window.app = { play: showPlayer, markListened: (idx) => { markListened(articles[idx]); render(); }, playMonth: playMonth };
 
     // ============== 运行日志查看器 ==============
     const btnLog = document.getElementById('btn-log');

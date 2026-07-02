@@ -202,8 +202,20 @@ main {
 .month-count {
     font-size: 12px;
     color: var(--text-secondary);
-    margin-left: auto;
 }
+.btn-month-play {
+    margin-left: auto;
+    padding: 4px 10px;
+    font-size: 12px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+}
+.btn-month-play:hover { opacity: 0.85; }
 .month-content {
     display: none;
     flex-direction: column;
