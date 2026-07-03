@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>早报电台 - 公众号文章语音</title>
-    <link rel="stylesheet" href="css/style.css?v=28">
+    <link rel="stylesheet" href="css/style.css?v=29">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
 </head>
 <body>
@@ -103,6 +103,7 @@
                 <div class="header-actions">
                     <button id="btn-log" class="btn-log" title="运行日志">&#128203;</button>
                     <button id="btn-play-log" class="btn-log" title="播放日志">&#127911;</button>
+                    <button id="btn-favorites" class="btn-log" title="收藏夹">&#9733; 收藏</button>
                     <button id="btn-play-all" class="btn-play-all" title="播放全部文章">&#9654; 连播</button>
                     <button id="btn-voice" class="btn-voice" title="声控指令 (Android/桌面)">🎤</button>
                     <button id="btn-notify" class="btn-notify" title="开启浏览器通知">&#128276;</button>
@@ -281,7 +282,20 @@
         </div>
     </div>
 
+    <!-- 收藏面板 -->
+    <div id="favorites-overlay" class="favorites-overlay"></div>
+    <div id="favorites-panel" class="favorites-panel">
+        <div class="favorites-header">
+            <h2>&#9733; 收藏夹</h2>
+            <button id="btn-play-all-fav" class="btn-play-all-fav" title="按时间倒序连续播放所有收藏">▶ 连播全部</button>
+            <button id="favorites-close" class="favorites-close" title="关闭">&times;</button>
+        </div>
+        <div id="favorites-list" class="favorites-list">
+            <p class="fav-empty">还没有收藏的文章。点击文章卡片上的 ☆ 即可收藏。</p>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-    <script src="js/app.js?v=28"></script>
+    <script src="js/app.js?v=29"></script>
 </body>
 </html>

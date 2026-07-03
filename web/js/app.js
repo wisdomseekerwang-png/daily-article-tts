@@ -6,6 +6,7 @@
     const AUDIO_DIR = 'audio/';
     const STORAGE_KEY = 'radio_schedule_v2';
     const LISTENED_KEY = 'radio_listened';
+    const FAVORITES_KEY = 'radio_favorites';
     const IP_CACHE_KEY = 'radio_ip_cache';
 
     const SUPABASE_URL = 'https://bkfdqrcpaeaisakmqtua.supabase.co';
@@ -144,6 +145,29 @@
     const isListened = (article) => {
         return article && article.audio && getListenedSet().has(article.audio);
     };
+
+    // ============== 收藏 ==============
+    const getFavoritesSet = () => {
+        try { return new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]')); }
+        catch(e) { return new Set(); }
+    };
+    const saveFavoritesSet = (set) => {
+        try { localStorage.setItem(FAVORITES_KEY, JSON.stringify([...set])); } catch(e) {}
+    };
+    const isFavorite = (article) => {
+        return article && article.audio && getFavoritesSet().has(article.audio);
+    };
+    const toggleFavorite = (article) => {
+        if (!article || !article.audio) return;
+        const set = getFavoritesSet();
+        if (set.has(article.audio)) set.delete(article.audio);
+        else set.add(article.audio);
+        saveFavoritesSet(set);
+    };
+    const getFavoriteArticles = () => {
+        const set = getFavoritesSet();
+        return articles.filter(a => a.audio && set.has(a.audio));
+    };
     // Find next unlistened article starting from given index, wraps around
     // Only consider active sources
     const findNextUnlistened = (startFrom) => {
@@ -271,20 +295,23 @@
         const cls = sourceClass(article.source);
         const card = document.createElement('div');
         card.className = 'card-today';
+        const fav = isFavorite(article);
+        const idx = articles.indexOf(article);
         card.innerHTML = `
             <div class="card-header">
                 <span class="source-tag ${cls}">${article.source}</span>
                 <span class="card-date">${formatDate(article.publish_time || article.date)}</span>
+                <button class="btn-fav ${fav ? 'faved' : ''}" onclick="event.stopPropagation();app.toggleFav(${idx})" title="${fav ? '取消收藏' : '收藏'}">${fav ? '★' : '☆'}</button>
             </div>
             <div class="card-title">${article.title}</div>
             <div class="card-actions">
-                <button class="btn btn-primary" onclick="app.play(${articles.indexOf(article)})">
+                <button class="btn btn-primary" onclick="app.play(${idx})">
                     &#9654; 播放语音
                 </button>
                 <a href="${article.url}" target="_blank" class="btn btn-outline">
                     &#128196; 阅读原文
                 </a>
-                <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();app.markListened(${articles.indexOf(article)})" title="标记已听">
+                <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();app.markListened(${idx})" title="标记已听">
                     &#10003;
                 </button>
             </div>
@@ -298,6 +325,7 @@
         // 非活跃来源始终显示为已听状态
         const fromActive = ACTIVE_SOURCES.some(s => article.source && article.source.includes(s));
         const listened = !fromActive || isListened(article);
+        const fav = isFavorite(article);
         const card = document.createElement('div');
         card.className = 'history-card' + (listened ? ' listened' : '');
         const idx = articles.indexOf(article);
@@ -321,16 +349,99 @@
                     ${listened ? '<span class="listened-badge">已听</span>' : ''}
                 </div>
             </div>
+            <button class="btn-fav-sm ${fav ? 'faved' : ''}" onclick="event.stopPropagation();app.toggleFav(${idx})" title="${fav ? '取消收藏' : '收藏'}">${fav ? '★' : '☆'}</button>
             ${actionBtn}
         `;
         return card;
     };
 
     // Render
+    // ============== 收藏面板渲染 ==============
+    const renderFavorites = () => {
+        const container = document.getElementById('favorites-list');
+        const fab = document.getElementById('btn-favorites');
+        if (!container) return;
+        container.innerHTML = '';
+        const favSet = getFavoritesSet();
+        // 1) update FAB badge
+        if (fab) {
+            const badge = favSet.size > 0 ? ` (${favSet.size})` : '';
+            fab.innerHTML = `&#9733; 收藏${badge}`;
+        }
+        // 2) collect favorites from current article list
+        const favArticles = articles.filter(a => a.audio && favSet.has(a.audio));
+        if (favArticles.length === 0) {
+            container.innerHTML = '<p class="fav-empty">还没有收藏的文章。点击文章卡片上的 ☆ 即可收藏。</p>';
+            return;
+        }
+        // 3) group by YYYY-MM
+        const monthGroups = {};
+        favArticles.forEach(a => {
+            const ym = (a.date || '').substring(0, 7);
+            if (!monthGroups[ym]) monthGroups[ym] = [];
+            monthGroups[ym].push(a);
+        });
+        const sortedMonths = Object.keys(monthGroups).sort().reverse();
+        sortedMonths.forEach(ym => {
+            const articlesInMonth = monthGroups[ym];
+            const [y, m] = ym.split('-');
+            const monthLabel = `${y}年${parseInt(m)}月`;
+            const group = document.createElement('div');
+            group.className = 'month-group';
+            const isLatest = ym === sortedMonths[0];
+            if (isLatest) group.classList.add('expanded');
+
+            const header = document.createElement('div');
+            header.className = 'month-header';
+            header.innerHTML = `
+                <span class="month-arrow">${isLatest ? '▼' : '▶'}</span>
+                <span class="month-label">${monthLabel}</span>
+                <span class="month-count">${articlesInMonth.length}篇</span>
+                <button class="btn-month-play" onclick="event.stopPropagation();app.playFavMonth('${ym}')" title="播放本月收藏">▶ 播放本月</button>
+            `;
+            header.onclick = () => {
+                group.classList.toggle('expanded');
+                const arrow = header.querySelector('.month-arrow');
+                arrow.textContent = group.classList.contains('expanded') ? '▼' : '▶';
+            };
+
+            const content = document.createElement('div');
+            content.className = 'month-content';
+            articlesInMonth.forEach(a => content.appendChild(createFavCard(a)));
+
+            group.appendChild(header);
+            group.appendChild(content);
+            container.appendChild(group);
+        });
+    };
+
+    // Compact card for favorites panel
+    const createFavCard = (article) => {
+        const cls = sourceClass(article.source);
+        const idx = articles.indexOf(article);
+        const card = document.createElement('div');
+        card.className = 'fav-card';
+        card.innerHTML = `
+            <div class="play-icon" onclick="event.stopPropagation();app.play(${idx})">&#9654;</div>
+            <div class="source-dot ${cls}"></div>
+            <div class="card-body" onclick="app.play(${idx})">
+                <div class="card-title">${article.title}</div>
+                <div class="card-meta">
+                    <span>${article.source}</span>
+                    <span class="dot"></span>
+                    <span>${formatDate(article.publish_time || article.date)}</span>
+                </div>
+            </div>
+            <button class="btn-fav-sm faved" onclick="event.stopPropagation();app.toggleFav(${idx})" title="取消收藏">★</button>
+        `;
+        return card;
+    };
+
     const render = () => {
         todayCards.innerHTML = '';
         backlogCards.innerHTML = '';
         articleList.innerHTML = '';
+        renderFavorites();
 
         if (!articles.length) {
             articleList.innerHTML = '<p class="loading">暂无文章，请等待自动抓取...</p>';
@@ -928,6 +1039,36 @@
         monthPlayLabel = '';
     };
 
+    // ============== 收藏列表播放 ==============
+    const playList = (list, label) => {
+        if (!list || list.length === 0) {
+            showAlarm('列表为空');
+            return;
+        }
+        if (isPlayAll) stopPlayAll();
+        monthPlayList = list.slice();
+        monthPlayPos = 0;
+        monthPlayLabel = label || '收藏';
+        showPlayer(articles.indexOf(monthPlayList[0]));
+        showAlarm(`开始播放${monthPlayLabel}，共 ${monthPlayList.length} 篇...`);
+    };
+    const playFavoritesMonth = (ym) => {
+        const favSet = getFavoritesSet();
+        const list = articles.filter(a => favSet.has(a.audio) && (a.date || '').startsWith(ym));
+        const [y, m] = ym.split('-');
+        playList(list, `${y}年${parseInt(m)}月收藏`);
+    };
+    const playAllFavorites = () => {
+        const list = getFavoriteArticles();
+        if (list.length === 0) {
+            showAlarm('收藏夹为空');
+            return;
+        }
+        // Sort by date descending
+        list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        playList(list, '所有收藏');
+    };
+
     const playAllArticles = () => {
         if (articles.length === 0) return;
         stopMonthPlay(); // Cancel any month play
@@ -1163,7 +1304,28 @@
         });
 
     // Expose to global
-    window.app = { play: showPlayer, markListened: (idx) => { markListened(articles[idx]); render(); }, markUnlistened: (idx) => { markUnlistened(articles[idx]); render(); }, playMonth: playMonth };
+    window.app = { play: showPlayer, markListened: (idx) => { markListened(articles[idx]); render(); }, markUnlistened: (idx) => { markUnlistened(articles[idx]); render(); }, playMonth: playMonth, toggleFav: (idx) => { toggleFavorite(articles[idx]); render(); }, playFavMonth: playFavoritesMonth, playAllFav: playAllFavorites };
+
+    // ============== 收藏面板控制 ==============
+    const btnFavorites = document.getElementById('btn-favorites');
+    const favPanel = document.getElementById('favorites-panel');
+    const favOverlay = document.getElementById('favorites-overlay');
+    const favClose = document.getElementById('favorites-close');
+    const btnPlayAllFav = document.getElementById('btn-play-all-fav');
+    if (btnFavorites) {
+        btnFavorites.addEventListener('click', () => {
+            favPanel.classList.add('open');
+            favOverlay.classList.add('open');
+            renderFavorites();
+        });
+    }
+    const closeFavPanel = () => {
+        favPanel.classList.remove('open');
+        favOverlay.classList.remove('open');
+    };
+    if (favClose) favClose.addEventListener('click', closeFavPanel);
+    if (favOverlay) favOverlay.addEventListener('click', closeFavPanel);
+    if (btnPlayAllFav) btnPlayAllFav.addEventListener('click', playAllFavorites);
 
     // ============== 运行日志查看器 ==============
     const btnLog = document.getElementById('btn-log');

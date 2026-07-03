@@ -350,7 +350,7 @@ main {
     background: #fff;
     border-top: 1px solid var(--border);
     box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
-    z-index: 100;
+    z-index: 250;
 }
 .player-inner {
     max-width: 640px;
@@ -1002,4 +1002,174 @@ main {
     color: #007aff;
     margin-left: 4px;
     flex-shrink: 0;
+}
+
+/* ============== 收藏按钮 (★) ============== */
+.btn-fav {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #ffb800;
+    font-size: 22px;
+    line-height: 1;
+    padding: 0 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+    transition: transform 0.15s;
+}
+.btn-fav:hover { transform: scale(1.2); }
+.btn-fav.faved { color: #ff9500; text-shadow: 0 1px 2px rgba(255, 149, 0, 0.4); }
+.btn-fav-sm {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #d0d0d0;
+    font-size: 20px;
+    line-height: 1;
+    padding: 0 4px;
+    flex-shrink: 0;
+    transition: transform 0.15s;
+}
+.btn-fav-sm:hover { transform: scale(1.2); }
+.btn-fav-sm.faved { color: #ff9500; text-shadow: 0 1px 2px rgba(255, 149, 0, 0.4); }
+
+/* ============== 收藏侧边栏 ============== */
+.favorites-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 199;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+}
+.favorites-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+.favorites-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 420px;
+    max-width: 92vw;
+    background: var(--bg);
+    z-index: 200;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.18);
+}
+.favorites-panel.open { transform: translateX(0); }
+.favorites-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card-bg);
+    flex-shrink: 0;
+}
+.favorites-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #ff9500;
+    flex: 1;
+}
+.btn-play-all-fav {
+    background: linear-gradient(135deg, #ff6b35, #ff3366);
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(255, 51, 102, 0.35);
+    transition: all 0.2s;
+}
+.btn-play-all-fav:hover { box-shadow: 0 4px 14px rgba(255, 51, 102, 0.5); transform: translateY(-1px); }
+.favorites-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    line-height: 1;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0 4px;
+    margin-left: 4px;
+}
+.favorites-close:hover { color: var(--text); }
+.favorites-list {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 14px 24px;
+    padding-bottom: calc(24px + var(--player-height, 0px));
+}
+.fav-empty {
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 40px 16px;
+    font-size: 14px;
+    line-height: 1.6;
+}
+.fav-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--card-bg);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border: 1px solid var(--border);
+}
+.fav-card:hover { background: #fff8ec; }
+.fav-card .play-icon {
+    color: var(--primary);
+    font-size: 16px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.fav-card .card-body { flex: 1; min-width: 0; }
+.fav-card .card-title {
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.3;
+}
+.fav-card .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* ============== 移动端适配 ============== */
+@media (max-width: 600px) {
+    .favorites-panel {
+        width: 100vw;
+        max-width: 100vw;
+    }
+    .favorites-header h2 { font-size: 16px; }
+    .btn-play-all-fav { padding: 8px 14px; font-size: 14px; }
+    .btn-fav { font-size: 26px; padding: 8px; }
+    .btn-fav-sm { font-size: 22px; padding: 6px; }
+    .fav-card { padding: 12px 14px; }
+    .fav-card .card-title { font-size: 15px; }
 }
