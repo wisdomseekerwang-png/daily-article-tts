@@ -135,6 +135,12 @@
         set.add(article.audio);
         saveListenedSet(set);
     };
+    const markUnlistened = (article) => {
+        if (!article || !article.audio) return;
+        const set = getListenedSet();
+        set.delete(article.audio);
+        saveListenedSet(set);
+    };
     const isListened = (article) => {
         return article && article.audio && getListenedSet().has(article.audio);
     };
@@ -296,6 +302,13 @@
         card.className = 'history-card' + (listened ? ' listened' : '');
         const idx = articles.indexOf(article);
         card.onclick = () => app.play(idx);
+        // 活跃来源已听 → 显示"↺ 标记未听"按钮；活跃来源未听 → 显示"✓ 标记已听"；非活跃来源 → 不可标记
+        let actionBtn = '';
+        if (fromActive && listened) {
+            actionBtn = `<button class="btn-icon btn-mark-unlistened" onclick="event.stopPropagation();app.markUnlistened(${idx})" title="标记为未听">&#8634;</button>`;
+        } else if (fromActive) {
+            actionBtn = `<button class="btn-icon btn-mark-listened" onclick="event.stopPropagation();app.markListened(${idx})" title="标记已听">&#10003;</button>`;
+        }
         card.innerHTML = `
             <div class="play-icon">${listened ? '&#10003;' : '&#9654;'}</div>
             <div class="source-dot ${cls}"></div>
@@ -308,7 +321,7 @@
                     ${listened ? '<span class="listened-badge">已听</span>' : ''}
                 </div>
             </div>
-            ${!listened ? `<button class="btn-icon btn-mark-listened" onclick="event.stopPropagation();app.markListened(${idx})" title="标记已听">&#10003;</button>` : ''}
+            ${actionBtn}
         `;
         return card;
     };
@@ -1150,7 +1163,7 @@
         });
 
     // Expose to global
-    window.app = { play: showPlayer, markListened: (idx) => { markListened(articles[idx]); render(); }, playMonth: playMonth };
+    window.app = { play: showPlayer, markListened: (idx) => { markListened(articles[idx]); render(); }, markUnlistened: (idx) => { markUnlistened(articles[idx]); render(); }, playMonth: playMonth };
 
     // ============== 运行日志查看器 ==============
     const btnLog = document.getElementById('btn-log');
