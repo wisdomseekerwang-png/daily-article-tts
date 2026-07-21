@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>早报电台 - 公众号文章语音</title>
+    <link rel="stylesheet" href="css/style.css?v=29">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
+</head>
+<body>
+    <div id="alarm-bar" class="alarm-bar" style="display:none">
+        <span class="alarm-icon">&#128276;</span>
+        <span id="alarm-text" class="alarm-text"></span>
+        <button id="alarm-action" class="alarm-action" style="display:none">&#9654; 点击播放</button>
+        <button id="alarm-dismiss" class="alarm-dismiss">&times;</button>
+    </div>
+
+    <header>
+        <div class="header-inner">
+            <h1>早报电台 <button id="btn-help" class="btn-help" title="使用说明">?</button></h1>
+            <p class="subtitle">猫笔刀 &middot; 刘备教授 &middot; 孥孥的大树 &middot; 卢克文工作室 &middot; 海里的小龙龙 &middot; 远方青木 &middot; 每日语音播报</p>
+            <div class="schedule-row">
+                <div class="schedule-times">
+                    <label class="schedule-label">
+                        <input type="checkbox" id="schedule-toggle" checked>
+                        定时播放
+                    </label>
+                    <div id="schedule-slots" class="schedule-slots">
+                        <div class="schedule-slot" data-slot="0">
+                            <input type="checkbox" class="slot-toggle" checked>
+                            <select class="slot-hour">
+                                <option value="6">06</option><option value="7">07</option><option value="8" selected>08</option>
+                                <option value="9">09</option><option value="10">10</option><option value="11">11</option>
+                                <option value="12">12</option><option value="13">13</option><option value="14">14</option>
+                                <option value="15">15</option><option value="16">16</option><option value="17">17</option>
+                                <option value="18">18</option><option value="19">19</option><option value="20">20</option>
+                                <option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                            </select>:<select class="slot-minute">
+                                <option value="0" selected>00</option><option value="1">01</option><option value="2">02</option><option value="3">03</option><option value="4">04</option>
+                                <option value="5">05</option><option value="6">06</option><option value="7">07</option><option value="8">08</option><option value="9">09</option>
+                                <option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option>
+                                <option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option>
+                                <option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option>
+                                <option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option>
+                                <option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option>
+                                <option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option>
+                                <option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option>
+                                <option value="50">50</option><option value="51">51</option><option value="52">52</option><option value="53">53</option><option value="54">54</option>
+                                <option value="55">55</option><option value="56">56</option><option value="57">57</option><option value="58">58</option><option value="59">59</option>
+                            </select>
+                        </div>
+                        <div class="schedule-slot" data-slot="1">
+                            <input type="checkbox" class="slot-toggle" checked>
+                            <select class="slot-hour">
+                                <option value="6">06</option><option value="7">07</option><option value="8">08</option>
+                                <option value="9">09</option><option value="10">10</option><option value="11">11</option>
+                                <option value="12" selected>12</option><option value="13">13</option><option value="14">14</option>
+                                <option value="15">15</option><option value="16">16</option><option value="17">17</option>
+                                <option value="18">18</option><option value="19">19</option><option value="20">20</option>
+                                <option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                            </select>:<select class="slot-minute">
+                                <option value="0" selected>00</option><option value="1">01</option><option value="2">02</option><option value="3">03</option><option value="4">04</option>
+                                <option value="5">05</option><option value="6">06</option><option value="7">07</option><option value="8">08</option><option value="9">09</option>
+                                <option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option>
+                                <option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option>
+                                <option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option>
+                                <option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option>
+                                <option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option>
+                                <option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option>
+                                <option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option>
+                                <option value="50">50</option><option value="51">51</option><option value="52">52</option><option value="53">53</option><option value="54">54</option>
+                                <option value="55">55</option><option value="56">56</option><option value="57">57</option><option value="58">58</option><option value="59">59</option>
+                            </select>
+                        </div>
+                        <div class="schedule-slot" data-slot="2">
+                            <input type="checkbox" class="slot-toggle" checked>
+                            <select class="slot-hour">
+                                <option value="6">06</option><option value="7">07</option><option value="8">08</option>
+                                <option value="9">09</option><option value="10">10</option><option value="11">11</option>
+                                <option value="12">12</option><option value="13">13</option><option value="14">14</option>
+                                <option value="15">15</option><option value="16">16</option><option value="17">17</option>
+                                <option value="18">18</option><option value="19">19</option><option value="20" selected>20</option>
+                                <option value="21">21</option><option value="22">22</option><option value="23">23</option>
+                            </select>:<select class="slot-minute">
+                                <option value="0" selected>00</option><option value="1">01</option><option value="2">02</option><option value="3">03</option><option value="4">04</option>
+                                <option value="5">05</option><option value="6">06</option><option value="7">07</option><option value="8">08</option><option value="9">09</option>
+                                <option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option>
+                                <option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option>
+                                <option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option>
+                                <option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option>
+                                <option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option>
+                                <option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option>
+                                <option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option>
+                                <option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option>
+                                <option value="50">50</option><option value="51">51</option><option value="52">52</option><option value="53">53</option><option value="54">54</option>
+                                <option value="55">55</option><option value="56">56</option><option value="57">57</option><option value="58">58</option><option value="59">59</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button id="btn-log" class="btn-log" title="运行日志">&#128203;</button>
+                    <button id="btn-play-log" class="btn-log" title="播放日志">&#127911;</button>
+                    <button id="btn-favorites" class="btn-log" title="收藏夹">&#9733; 收藏</button>
+                    <button id="btn-play-all" class="btn-play-all" title="播放全部文章">&#9654; 连播</button>
+                    <button id="btn-voice" class="btn-voice" title="声控指令 (Android/桌面)">🎤</button>
+                    <button id="btn-notify" class="btn-notify" title="开启浏览器通知">&#128276;</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <section id="today-section" class="today-section" style="display:none">
+            <h2>今日早报</h2>
+            <div id="today-cards" class="today-cards"></div>
+        </section>
+
+        <section id="backlog-section" class="today-section" style="display:none">
+            <h2>往日早报</h2>
+            <div id="backlog-cards" class="today-cards"></div>
+        </section>
+
+        <section class="history-section">
+            <h2>已听</h2>
+            <div id="article-list" class="article-list">
+                <p class="loading">加载中...</p>
+            </div>
+        </section>
+    </main>
+
+    <div id="help-modal" class="help-modal" style="display:none">
+        <div class="help-overlay"></div>
+        <div class="help-content">
+            <button id="help-close" class="help-close">&times;</button>
+            <h2>使用说明</h2>
+
+            <div class="help-section">
+                <h3>什么是早报电台？</h3>
+                <p>自动抓取优质公众号文章，生成语音播报。每天自动更新，无需手动操作。</p>
+            </div>
+
+            <div class="help-section">
+                <h3>更新时间</h3>
+                <div class="help-highlight">
+                    <span class="help-badge">自动</span>
+                    每小时自动检查更新（06:00 ~ 23:00 北京时间）
+                </div>
+                <p class="help-note">文章来源发布后，最快 1 小时内生成语音。同一篇文章不会重复生成。</p>
+            </div>
+
+            <div class="help-section">
+                <h3>文章来源</h3>
+                <div class="help-sources">
+                    <span class="source-chip maobidao">猫笔刀</span>
+                    <span class="source-chip liubei">刘备教授</span>
+                    <span class="source-chip nunu">孥孥的大树</span>
+                    <span class="source-chip lukewen">卢克文工作室</span>
+                    <span class="source-chip xiaolonglong">海里的小龙龙</span>
+                    <span class="source-chip yuanfangqingmu">远方青木</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>生成方式</h3>
+                <p>文章语音通过两种方式自动生成，互为补充：</p>
+                <div class="help-gen-row">
+                    <div class="help-gen-card">
+                        <div class="help-gen-title"><span class="help-badge" style="background:#2d6a4f">本地生成</span></div>
+                        <p>本地电脑每小时运行自动化任务，AI 搜索发现新文章 → 抓取正文 → 生成语音 MP3 → 推送到 GitHub Pages。</p>
+                        <p class="help-note">覆盖全部 6 个公众号。需要本地电脑开机。</p>
+                    </div>
+                    <div class="help-gen-card">
+                        <div class="help-gen-title"><span class="help-badge" style="background:#1982c4">CI 云端生成</span></div>
+                        <p>GitHub Actions 服务器每小时自动运行，直接从网站抓取文章内容 → 生成语音 → 部署到 GitHub Pages。</p>
+                        <p class="help-note">覆盖猫笔刀、刘备教授、孥孥的大树、卢克文工作室、远方青木。无需本地电脑。</p>
+                    </div>
+                </div>
+                <p class="help-note" style="margin-top:8px">两种方式通过文章日期+来源自动去重，不会重复生成同一篇文章。</p>
+            </div>
+
+            <div class="help-section">
+                <h3>播放控制</h3>
+                <ul>
+                    <li><strong>单篇播放</strong> — 点击文章卡片上的「播放语音」按钮</li>
+                    <li><strong>连播全部</strong> — 点击顶部「连播」按钮，按顺序播放所有文章</li>
+                    <li><strong>底部播放器</strong> — 播放时出现，支持上一篇/下一篇、进度拖动</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h3>定时播放</h3>
+                <p>设置 3 个定时播放时间，到点自动开始连播。</p>
+                <ul>
+                    <li>勾选 <strong>「定时播放」</strong> 总开关启用</li>
+                    <li>每个时间槽可独立 <strong>启用/禁用</strong>（取消勾选变灰）</li>
+                    <li>分别设置 <strong>小时</strong> 和 <strong>分钟</strong></li>
+                    <li>每个时间槽每天只触发一次，修改时间后可重新触发</li>
+                </ul>
+                <p class="help-note">默认设置：08:00 / 12:00 / 20:00</p>
+            </div>
+
+            <div class="help-section">
+                <h3>通知提醒</h3>
+                <p>点击顶部 <strong>🔔</strong> 按钮开启浏览器通知，到点会收到系统通知提醒。首次开启需授权。</p>
+            </div>
+
+            <div class="help-section">
+                <h3>使用建议</h3>
+                <ul>
+                    <li>建议将页面 <strong>保持在浏览器标签页中</strong>，关闭后定时播放不会生效</li>
+                    <li>如果页面长时间不更新，尝试 <strong>Ctrl+Shift+R</strong> 强制刷新</li>
+                    <li>音频开头会播报「公众号名 + 文章名」，方便识别内容</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h3>声控指令</h3>
+                <p>点击顶部 <strong>🎤</strong> 按钮开启语音控制，支持以下指令：</p>
+                <div class="help-voice-cmds">
+                    <div class="voice-cmd"><span class="voice-cmd-key">播放</span><span class="voice-cmd-desc">开始/继续播放</span></div>
+                    <div class="voice-cmd"><span class="voice-cmd-key">暂停</span><span class="voice-cmd-desc">暂停当前播放</span></div>
+                    <div class="voice-cmd"><span class="voice-cmd-key">下一篇 / 上一篇</span><span class="voice-cmd-desc">切换文章</span></div>
+                    <div class="voice-cmd"><span class="voice-cmd-key">连播 / 停止</span><span class="voice-cmd-desc">全部连播 / 停止连播</span></div>
+                </div>
+                <p class="help-note">仅支持 Android Chrome 和桌面 Chrome。iPhone 暂不支持语音识别。</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="log-modal" class="log-modal" style="display:none">
+        <div class="log-overlay"></div>
+        <div class="log-content">
+            <div class="log-header">
+                <h2>运行日志</h2>
+                <button id="log-close" class="log-close">&times;</button>
+            </div>
+            <div id="log-body" class="log-body">
+                <p class="loading">加载中...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="playlog-modal" class="log-modal" style="display:none">
+        <div class="playlog-overlay"></div>
+        <div class="log-content">
+            <div class="log-header">
+                <h2>播放日志</h2>
+                <button id="playlog-close" class="log-close">&times;</button>
+            </div>
+            <div id="playlog-body" class="log-body">
+                <p class="loading">加载中...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="voice-toast" class="voice-toast" style="display:none">
+        <span class="voice-toast-icon">🎤</span>
+        <span id="voice-toast-text" class="voice-toast-text"></span>
+    </div>
+
+    <div id="player" class="player" style="display:none">
+        <div class="player-inner">
+            <div class="player-info">
+                <span id="player-source" class="player-source"></span>
+                <span id="player-title" class="player-title"></span>
+            </div>
+            <div class="player-controls">
+                <button id="btn-prev" class="player-btn" title="上一篇">&#9198;</button>
+                <button id="btn-rewind" class="player-btn" title="后退15秒">&#9194;15</button>
+                <button id="btn-play" class="player-btn play-btn" title="播放/暂停">&#9654;</button>
+                <button id="btn-forward" class="player-btn" title="快进15秒">15&#9193;</button>
+                <button id="btn-next" class="player-btn" title="下一篇">&#9197;</button>
+            </div>
+            <div class="player-progress">
+                <span id="time-current">0:00</span>
+                <input type="range" id="progress-bar" min="0" max="100" value="0" step="0.1">
+                <span id="time-total">0:00</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 收藏面板 -->
+    <div id="favorites-overlay" class="favorites-overlay"></div>
+    <div id="favorites-panel" class="favorites-panel">
+        <div class="favorites-header">
+            <h2>&#9733; 收藏夹</h2>
+            <button id="btn-play-all-fav" class="btn-play-all-fav" title="按时间倒序连续播放所有收藏">▶ 连播全部</button>
+            <button id="favorites-close" class="favorites-close" title="关闭">&times;</button>
+        </div>
+        <div id="favorites-list" class="favorites-list">
+            <p class="fav-empty">还没有收藏的文章。点击文章卡片上的 ☆ 即可收藏。</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="js/app.js?v=29"></script>
+</body>
+</html>

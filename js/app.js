@@ -1,0 +1,1454 @@
+// 早报电台 - 前端应用
+(function() {
+    'use strict';
+
+    const DATA_URL = 'data/articles.json';
+    const AUDIO_DIR = 'audio/';
+    const STORAGE_KEY = 'radio_schedule_v2';
+    const LISTENED_KEY = 'radio_listened';
+    const FAVORITES_KEY = 'radio_favorites';
+    const IP_CACHE_KEY = 'radio_ip_cache';
+
+    const SUPABASE_URL = 'https://bkfdqrcpaeaisakmqtua.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJrZmRxcmNwYWVhaXNha21xdHVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjM3NjYsImV4cCI6MjA5NjAzOTc2Nn0.D_COQDiYwz3H-dMLHXpyWMYEMqqueHiNv8wzylGd5go';
+    const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+    let supabase = null;
+    let supabaseInitError = '';
+    if (SUPABASE_ENABLED) {
+        try {
+            if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                console.log('[播放日志] Supabase 客户端已初始化');
+            } else {
+                supabaseInitError = 'Supabase JS 库未加载';
+                console.warn('[播放日志] Supabase JS 库未加载');
+            }
+        } catch (e) {
+            supabaseInitError = e.message;
+            console.warn('[播放日志] Supabase 初始化失败:', e.message);
+        }
+    }
+    const DEFAULT_SLOTS = [
+        { enabled: true, hour: 8, minute: 0 },
+        { enabled: true, hour: 12, minute: 0 },
+        { enabled: true, hour: 20, minute: 0 },
+    ];
+
+    let articles = [];
+    let currentIndex = -1;
+    let scheduleTimer = null;
+    const audio = new Audio();
+
+    // DOM Elements
+    const todaySection = document.getElementById('today-section');
+    const todayCards = document.getElementById('today-cards');
+    const backlogSection = document.getElementById('backlog-section');
+    const backlogCards = document.getElementById('backlog-cards');
+    const articleList = document.getElementById('article-list');
+    const player = document.getElementById('player');
+    const playerSource = document.getElementById('player-source');
+    const playerTitle = document.getElementById('player-title');
+    const btnPlay = document.getElementById('btn-play');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+    const btnRewind = document.getElementById('btn-rewind');
+    const btnForward = document.getElementById('btn-forward');
+    const progressBar = document.getElementById('progress-bar');
+    const timeCurrent = document.getElementById('time-current');
+    const timeTotal = document.getElementById('time-total');
+
+    // Source config
+    const sourceClass = (name) => {
+        if (!name) return 'unknown';
+        if (name.includes('猫笔刀')) return 'maobidao';
+        if (name.includes('刘备')) return 'liubei';
+        if (name.includes('孥孥')) return 'nunu';
+        if (name.includes('卢克文')) return 'lukewen';
+        if (name.includes('小龙龙')) return 'xiaolonglong';
+        if (name.includes('远方青木')) return 'yuanfangqingmu';
+        if (name.includes('搬砖小组')) return 'banzhuan';
+        if (name.includes('龙谈价值')) return 'longtan';
+        if (name.includes('格兰投研')) return 'gelan';
+        if (name.includes('价值事务所')) return 'jiazhi';
+        if (name.includes('棋行者')) return 'qixing';
+        if (name.includes('伯格医生')) return 'boge';
+        return 'unknown';
+    };
+
+    // Active sources: only these appear in 今日早报 / 往日早报
+    const ACTIVE_SOURCES = ['猫笔刀', '龙哥白话堂'];
+
+    const formatDuration = (sec) => {
+        if (!sec || !isFinite(sec)) return '0:00';
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        const month = d.getMonth() + 1;
+        const day = d.getDate();
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+        // Include time if available and valid
+        const hours = d.getHours();
+        const mins = d.getMinutes();
+        if (hours !== 0 || mins !== 0) {
+            return `${month}月${day}日 周${weekdays[d.getDay()]} ${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
+        }
+        return `${month}月${day}日 周${weekdays[d.getDay()]}`;
+    };
+
+    // UTC时间转北京时间字符串 (UTC+8)
+    const formatBJTime = (isoString) => {
+        try {
+            let s = String(isoString).trim();
+            // 旧 v21 格式 "YYYY-MM-DD HH:MM:SS" 没有时区，但存的是 UTC，需显式加 Z
+            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) {
+                s = s.replace(' ', 'T') + 'Z';
+            }
+            const d = new Date(s);
+            if (isNaN(d.getTime())) return s;
+            const bjMs = d.getTime() + 8 * 3600000;
+            const b = new Date(bjMs);
+            return b.getUTCFullYear() + '-' + String(b.getUTCMonth()+1).padStart(2,'0') + '-' + String(b.getUTCDate()).padStart(2,'0') + ' ' + String(b.getUTCHours()).padStart(2,'0') + ':' + String(b.getUTCMinutes()).padStart(2,'0') + ':' + String(b.getUTCSeconds()).padStart(2,'0');
+        } catch(e) { return String(isoString); }
+    };
+
+    const getToday = () => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    };
+
+    // ============== 已听追踪 ==============
+    const getListenedSet = () => {
+        try {
+            return new Set(JSON.parse(localStorage.getItem(LISTENED_KEY) || '[]'));
+        } catch(e) { return new Set(); }
+    };
+    const saveListenedSet = (set) => {
+        try { localStorage.setItem(LISTENED_KEY, JSON.stringify([...set])); } catch(e) {}
+    };
+    const markListened = (article) => {
+        if (!article || !article.audio) return;
+        const set = getListenedSet();
+        set.add(article.audio);
+        saveListenedSet(set);
+    };
+    const markUnlistened = (article) => {
+        if (!article || !article.audio) return;
+        const set = getListenedSet();
+        set.delete(article.audio);
+        saveListenedSet(set);
+    };
+    const isListened = (article) => {
+        return article && article.audio && getListenedSet().has(article.audio);
+    };
+
+    // ============== 收藏 ==============
+    const getFavoritesSet = () => {
+        try { return new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]')); }
+        catch(e) { return new Set(); }
+    };
+    const saveFavoritesSet = (set) => {
+        try { localStorage.setItem(FAVORITES_KEY, JSON.stringify([...set])); } catch(e) {}
+    };
+    const isFavorite = (article) => {
+        return article && article.audio && getFavoritesSet().has(article.audio);
+    };
+    const toggleFavorite = (article) => {
+        if (!article || !article.audio) return;
+        const set = getFavoritesSet();
+        if (set.has(article.audio)) set.delete(article.audio);
+        else set.add(article.audio);
+        saveFavoritesSet(set);
+    };
+    const getFavoriteArticles = () => {
+        const set = getFavoritesSet();
+        return articles.filter(a => a.audio && set.has(a.audio));
+    };
+    // Find next unlistened article starting from given index, wraps around
+    // Only consider active sources
+    const findNextUnlistened = (startFrom) => {
+        for (let i = startFrom; i < articles.length; i++) {
+            if (!isListened(articles[i]) && ACTIVE_SOURCES.some(s => articles[i].source && articles[i].source.includes(s))) return i;
+        }
+        return -1; // all remaining are listened
+    };
+
+    // ============== 播放日志 (IP + 时间 + 文章) ==============
+    let cachedIP = null;
+
+    const getVisitorIP = async () => {
+        if (cachedIP) return cachedIP;
+        // Check cache
+        try {
+            const cached = localStorage.getItem(IP_CACHE_KEY);
+            if (cached) {
+                const { ip, ts } = JSON.parse(cached);
+                // Cache for 24 hours
+                if (ip && Date.now() - ts < 86400000) {
+                    cachedIP = ip;
+                    return ip;
+                }
+            }
+        } catch(e) {}
+        // Fetch from ipify
+        try {
+            const resp = await fetch('https://api.ipify.org?format=json');
+            const data = await resp.json();
+            if (data.ip) {
+                cachedIP = data.ip;
+                localStorage.setItem(IP_CACHE_KEY, JSON.stringify({ ip: data.ip, ts: Date.now() }));
+                return data.ip;
+            }
+        } catch(e) {}
+        return 'unknown';
+    };
+
+    const addPlayLog = async (article) => {
+        if (!article || !article.audio) return;
+
+        // 点播放就标记已听（不需要等播完）
+        if (!isListened(article)) {
+            markListened(article);
+            render();
+        }
+
+        const ip = await getVisitorIP();
+        const timestamp = new Date().toISOString();
+
+        // 仅上传到 Supabase（异步，不阻塞播放）
+        if (supabase) {
+            supabase.from('play_logs').insert([{
+                ip: ip,
+                time: timestamp,
+                source: article.source || '',
+                title: article.title || '',
+                article_date: article.date || '',
+                audio: article.audio || '',
+            }]).then(({ data, error }) => {
+                if (error) {
+                    console.warn('[播放日志] Supabase上传失败:', error.message, error.code);
+                    lastRemoteError = '上传失败: ' + error.message;
+                } else {
+                    console.log('[播放日志] Supabase上传成功', data);
+                    lastRemoteError = '';
+                }
+            });
+        } else if (supabaseInitError) {
+            console.warn('[播放日志] Supabase未初始化:', supabaseInitError);
+            lastRemoteError = 'Supabase未初始化: ' + supabaseInitError;
+        } else {
+            console.warn('[播放日志] 无可用存储后端');
+            lastRemoteError = '无可用存储后端';
+        }
+    };
+
+    // 从 Supabase 获取远程播放日志
+    const fetchRemotePlayLogs = async () => {
+        lastRemoteError = '';
+        if (!supabase) return [];
+        try {
+            const { data, error } = await supabase
+                .from('play_logs')
+                .select('ip,time,source,title,article_date,audio')
+                .order('time', { ascending: false })
+                .limit(200);
+            if (error) throw error;
+            return (data || []).map(e => ({
+                ip: e.ip || 'unknown',
+                time: e.time ? formatBJTime(e.time) : '',
+                source: e.source || '',
+                title: e.title || '',
+                date: e.article_date || '',
+                audio: e.audio || '',
+            }));
+        } catch (err) {
+            lastRemoteError = err.message || String(err);
+            console.warn('[播放日志] Supabase获取失败:', err);
+            return [];
+        }
+    };
+
+    // 从 Supabase 播放日志同步已听状态到 localStorage
+    const syncListenedFromCloud = async () => {
+        const logs = await fetchRemotePlayLogs();
+        if (logs.length === 0) return;
+        const set = getListenedSet();
+        let changed = false;
+        logs.forEach(e => {
+            if (e.audio && !set.has(e.audio)) {
+                set.add(e.audio);
+                changed = true;
+            }
+        });
+        if (changed) {
+            saveListenedSet(set);
+            console.log('[已听同步] 从云端同步了新已听记录');
+        }
+    };
+
+    // Create today card
+    const createTodayCard = (article) => {
+        const cls = sourceClass(article.source);
+        const card = document.createElement('div');
+        card.className = 'card-today';
+        const fav = isFavorite(article);
+        const idx = articles.indexOf(article);
+        card.innerHTML = `
+            <div class="card-header">
+                <span class="source-tag ${cls}">${article.source}</span>
+                <span class="card-date">${formatDate(article.publish_time || article.date)}</span>
+                <button class="btn-fav ${fav ? 'faved' : ''}" onclick="event.stopPropagation();app.toggleFav(${idx})" title="${fav ? '取消收藏' : '收藏'}">${fav ? '★' : '☆'}</button>
+            </div>
+            <div class="card-title">${article.title}</div>
+            <div class="card-actions">
+                <button class="btn btn-primary" onclick="app.play(${idx})">
+                    &#9654; 播放语音
+                </button>
+                <a href="${article.url}" target="_blank" class="btn btn-outline">
+                    &#128196; 阅读原文
+                </a>
+                <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();app.markListened(${idx})" title="标记已听">
+                    &#10003;
+                </button>
+            </div>
+        `;
+        return card;
+    };
+
+    // Create history card
+    const createHistoryCard = (article) => {
+        const cls = sourceClass(article.source);
+        // 非活跃来源始终显示为已听状态
+        const fromActive = ACTIVE_SOURCES.some(s => article.source && article.source.includes(s));
+        const listened = !fromActive || isListened(article);
+        const fav = isFavorite(article);
+        const card = document.createElement('div');
+        card.className = 'history-card' + (listened ? ' listened' : '');
+        const idx = articles.indexOf(article);
+        card.onclick = () => app.play(idx);
+        // 活跃来源已听 → 显示"↺ 标记未听"按钮；活跃来源未听 → 显示"✓ 标记已听"；非活跃来源 → 不可标记
+        let actionBtn = '';
+        if (fromActive && listened) {
+            actionBtn = `<button class="btn-icon btn-mark-unlistened" onclick="event.stopPropagation();app.markUnlistened(${idx})" title="标记为未听">&#8634;</button>`;
+        } else if (fromActive) {
+            actionBtn = `<button class="btn-icon btn-mark-listened" onclick="event.stopPropagation();app.markListened(${idx})" title="标记已听">&#10003;</button>`;
+        }
+        card.innerHTML = `
+            <div class="play-icon">${listened ? '&#10003;' : '&#9654;'}</div>
+            <div class="source-dot ${cls}"></div>
+            <div class="card-body">
+                <div class="card-title">${article.title}</div>
+                <div class="card-meta">
+                    <span>${article.source}</span>
+                    <span class="dot"></span>
+                    <span>${formatDate(article.publish_time || article.date)}</span>
+                    ${listened ? '<span class="listened-badge">已听</span>' : ''}
+                </div>
+            </div>
+            <button class="btn-fav-sm ${fav ? 'faved' : ''}" onclick="event.stopPropagation();app.toggleFav(${idx})" title="${fav ? '取消收藏' : '收藏'}">${fav ? '★' : '☆'}</button>
+            ${actionBtn}
+        `;
+        return card;
+    };
+
+    // Render
+    // ============== 收藏面板渲染 ==============
+    const renderFavorites = () => {
+        const container = document.getElementById('favorites-list');
+        const fab = document.getElementById('btn-favorites');
+        if (!container) return;
+        container.innerHTML = '';
+        const favSet = getFavoritesSet();
+        // 1) update FAB badge
+        if (fab) {
+            const badge = favSet.size > 0 ? ` (${favSet.size})` : '';
+            fab.innerHTML = `&#9733; 收藏${badge}`;
+        }
+        // 2) collect favorites from current article list
+        const favArticles = articles.filter(a => a.audio && favSet.has(a.audio));
+        if (favArticles.length === 0) {
+            container.innerHTML = '<p class="fav-empty">还没有收藏的文章。点击文章卡片上的 ☆ 即可收藏。</p>';
+            return;
+        }
+        // 3) group by YYYY-MM
+        const monthGroups = {};
+        favArticles.forEach(a => {
+            const ym = (a.date || '').substring(0, 7);
+            if (!monthGroups[ym]) monthGroups[ym] = [];
+            monthGroups[ym].push(a);
+        });
+        const sortedMonths = Object.keys(monthGroups).sort().reverse();
+        sortedMonths.forEach(ym => {
+            const articlesInMonth = monthGroups[ym];
+            const [y, m] = ym.split('-');
+            const monthLabel = `${y}年${parseInt(m)}月`;
+            const group = document.createElement('div');
+            group.className = 'month-group';
+            const isLatest = ym === sortedMonths[0];
+            if (isLatest) group.classList.add('expanded');
+
+            const header = document.createElement('div');
+            header.className = 'month-header';
+            header.innerHTML = `
+                <span class="month-arrow">${isLatest ? '▼' : '▶'}</span>
+                <span class="month-label">${monthLabel}</span>
+                <span class="month-count">${articlesInMonth.length}篇</span>
+                <button class="btn-month-play" onclick="event.stopPropagation();app.playFavMonth('${ym}')" title="播放本月收藏">▶ 播放本月</button>
+            `;
+            header.onclick = () => {
+                group.classList.toggle('expanded');
+                const arrow = header.querySelector('.month-arrow');
+                arrow.textContent = group.classList.contains('expanded') ? '▼' : '▶';
+            };
+
+            const content = document.createElement('div');
+            content.className = 'month-content';
+            articlesInMonth.forEach(a => content.appendChild(createFavCard(a)));
+
+            group.appendChild(header);
+            group.appendChild(content);
+            container.appendChild(group);
+        });
+    };
+
+    // Compact card for favorites panel
+    const createFavCard = (article) => {
+        const cls = sourceClass(article.source);
+        const idx = articles.indexOf(article);
+        const card = document.createElement('div');
+        card.className = 'fav-card';
+        card.innerHTML = `
+            <div class="play-icon" onclick="event.stopPropagation();app.play(${idx})">&#9654;</div>
+            <div class="source-dot ${cls}"></div>
+            <div class="card-body" onclick="app.play(${idx})">
+                <div class="card-title">${article.title}</div>
+                <div class="card-meta">
+                    <span>${article.source}</span>
+                    <span class="dot"></span>
+                    <span>${formatDate(article.publish_time || article.date)}</span>
+                </div>
+            </div>
+            <button class="btn-fav-sm faved" onclick="event.stopPropagation();app.toggleFav(${idx})" title="取消收藏">★</button>
+        `;
+        return card;
+    };
+
+    const render = () => {
+        todayCards.innerHTML = '';
+        backlogCards.innerHTML = '';
+        articleList.innerHTML = '';
+        renderFavorites();
+
+        if (!articles.length) {
+            articleList.innerHTML = '<p class="loading">暂无文章，请等待自动抓取...</p>';
+            return;
+        }
+
+        const today = getToday();
+        // Only show articles within last 6 months (180 days)
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 180);
+        const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth()+1).padStart(2,'0')}-${String(cutoff.getDate()).padStart(2,'0')}`;
+        const recentArticles = articles.filter(a => a.date >= cutoffStr);
+
+        // Split into 3 groups:
+        // 1. Today unlistened (active sources only) → 今日早报
+        // 2. Older unlistened (active sources only) → 往日早报
+        // 3. Listened (active sources) + all inactive source articles → 已听
+        const todayUnlistened = recentArticles.filter(a =>
+            a.date === today && !isListened(a) && ACTIVE_SOURCES.some(s => a.source && a.source.includes(s))
+        );
+        const backlogUnlistened = recentArticles.filter(a =>
+            a.date !== today && !isListened(a) && ACTIVE_SOURCES.some(s => a.source && a.source.includes(s))
+        );
+        // 已听：活跃来源的已听文章 + 所有非活跃来源的文章
+        const listenedActive = recentArticles.filter(a =>
+            ACTIVE_SOURCES.some(s => a.source && a.source.includes(s)) && isListened(a)
+        );
+        const inactiveAll = recentArticles.filter(a =>
+            !ACTIVE_SOURCES.some(s => a.source && a.source.includes(s))
+        );
+        const listenedArticles = [...listenedActive, ...inactiveAll];
+
+        // Today (only unlistened)
+        if (todayUnlistened.length > 0) {
+            todaySection.style.display = 'block';
+            todayUnlistened.forEach(a => todayCards.appendChild(createTodayCard(a)));
+        } else {
+            todaySection.style.display = 'none';
+        }
+
+        // Backlog (older unlistened) — group by month with collapsible sections
+        if (backlogUnlistened.length > 0) {
+            backlogSection.style.display = 'block';
+            // Group by YYYY-MM
+            const blMonthGroups = {};
+            backlogUnlistened.forEach(a => {
+                const ym = (a.date || '').substring(0, 7);
+                if (!blMonthGroups[ym]) blMonthGroups[ym] = [];
+                blMonthGroups[ym].push(a);
+            });
+            const blSortedMonths = Object.keys(blMonthGroups).sort().reverse();
+
+            blSortedMonths.forEach(ym => {
+                const articlesInMonth = blMonthGroups[ym];
+                const [y, m] = ym.split('-');
+                const monthLabel = `${y}年${parseInt(m)}月`;
+
+                const group = document.createElement('div');
+                group.className = 'month-group';
+                const isLatest = ym === blSortedMonths[0];
+                if (isLatest) group.classList.add('expanded');
+
+                const header = document.createElement('div');
+                header.className = 'month-header';
+                header.innerHTML = `
+                    <span class="month-arrow">${isLatest ? '▼' : '▶'}</span>
+                    <span class="month-label">${monthLabel}</span>
+                    <span class="month-count">${articlesInMonth.length}篇</span>
+                    <button class="btn-month-play" onclick="event.stopPropagation();app.playMonth('${ym}')" title="播放本月所有文章">▶ 播放本月</button>
+                `;
+                header.onclick = () => {
+                    group.classList.toggle('expanded');
+                    const arrow = header.querySelector('.month-arrow');
+                    arrow.textContent = group.classList.contains('expanded') ? '▼' : '▶';
+                };
+
+                const content = document.createElement('div');
+                content.className = 'month-content';
+                articlesInMonth.forEach(a => content.appendChild(createTodayCard(a)));
+
+                group.appendChild(header);
+                group.appendChild(content);
+                backlogCards.appendChild(group);
+            });
+        } else {
+            backlogSection.style.display = 'none';
+        }
+
+        // Listened — group by month with collapsible sections
+        if (listenedArticles.length > 0) {
+            // Group by YYYY-MM
+            const monthGroups = {};
+            listenedArticles.forEach(a => {
+                const ym = (a.date || '').substring(0, 7); // "YYYY-MM"
+                if (!monthGroups[ym]) monthGroups[ym] = [];
+                monthGroups[ym].push(a);
+            });
+            // Sort months descending
+            const sortedMonths = Object.keys(monthGroups).sort().reverse();
+
+            sortedMonths.forEach(ym => {
+                const articlesInMonth = monthGroups[ym];
+                const [y, m] = ym.split('-');
+                const monthLabel = `${y}年${parseInt(m)}月`;
+
+                const group = document.createElement('div');
+                group.className = 'month-group';
+
+                const header = document.createElement('div');
+                header.className = 'month-header';
+                // Default: most recent month expanded, others collapsed
+                const isLatest = ym === sortedMonths[0];
+                if (isLatest) group.classList.add('expanded');
+                header.innerHTML = `
+                    <span class="month-arrow">${isLatest ? '▼' : '▶'}</span>
+                    <span class="month-label">${monthLabel}</span>
+                    <span class="month-count">${articlesInMonth.length}篇</span>
+                    <button class="btn-month-play" onclick="event.stopPropagation();app.playMonth('${ym}')" title="播放本月所有文章">▶ 播放本月</button>
+                `;
+                header.onclick = () => {
+                    group.classList.toggle('expanded');
+                    const arrow = header.querySelector('.month-arrow');
+                    arrow.textContent = group.classList.contains('expanded') ? '▼' : '▶';
+                };
+
+                const content = document.createElement('div');
+                content.className = 'month-content';
+                articlesInMonth.forEach(a => content.appendChild(createHistoryCard(a)));
+
+                group.appendChild(header);
+                group.appendChild(content);
+                articleList.appendChild(group);
+            });
+        } else if (todayUnlistened.length === 0 && backlogUnlistened.length === 0) {
+            articleList.innerHTML = '<p class="loading">暂无文章，请等待自动抓取...</p>';
+        }
+    };
+
+    // Player
+    const showPlayer = (index) => {
+        const article = articles[index];
+        if (!article || !article.audio) return;
+
+        currentIndex = index;
+        const cls = sourceClass(article.source);
+
+        playerSource.textContent = article.source;
+        playerSource.className = `player-source ${cls}`;
+        playerTitle.textContent = article.title;
+
+        audio.src = AUDIO_DIR + article.audio;
+        audio.load();
+        player.style.display = 'block';
+
+        audio.play().catch(() => {});
+        updatePlayButton();
+        addPlayLog(article);
+    };
+
+    const updatePlayButton = () => {
+        btnPlay.innerHTML = audio.paused ? '&#9654;' : '&#9646;&#9646;';
+    };
+
+    const playPrev = () => {
+        if (currentIndex > 0) showPlayer(currentIndex - 1);
+    };
+
+    const playNext = () => {
+        if (currentIndex < articles.length - 1) showPlayer(currentIndex + 1);
+    };
+
+    // Event listeners
+    btnPlay.addEventListener('click', () => {
+        if (currentIndex < 0) return;
+        if (audio.paused) {
+            audio.play().catch(() => {});
+        } else {
+            audio.pause();
+        }
+        updatePlayButton();
+    });
+
+    btnPrev.addEventListener('click', playPrev);
+    btnNext.addEventListener('click', playNext);
+
+    btnRewind.addEventListener('click', () => {
+        if (currentIndex < 0) return;
+        audio.currentTime = Math.max(0, audio.currentTime - 15);
+    });
+
+    btnForward.addEventListener('click', () => {
+        if (currentIndex < 0 || !isFinite(audio.duration)) return;
+        audio.currentTime = Math.min(audio.duration, audio.currentTime + 15);
+    });
+
+    audio.addEventListener('timeupdate', () => {
+        if (!audio.duration) return;
+        const pct = (audio.currentTime / audio.duration) * 100;
+        progressBar.value = pct;
+        timeCurrent.textContent = formatDuration(audio.currentTime);
+    });
+
+    audio.addEventListener('loadedmetadata', () => {
+        timeTotal.textContent = formatDuration(audio.duration);
+    });
+
+    audio.addEventListener('ended', () => {
+        updatePlayButton();
+        // Mark current article as listened
+        if (currentIndex >= 0 && articles[currentIndex]) {
+            markListened(articles[currentIndex]);
+        }
+        // Month play: advance to next article in the month list
+        if (monthPlayList && monthPlayList.length > 0) {
+            monthPlayPos++;
+            if (monthPlayPos < monthPlayList.length) {
+                const nextIdx = articles.indexOf(monthPlayList[monthPlayPos]);
+                if (nextIdx >= 0) {
+                    render();
+                    showPlayer(nextIdx);
+                }
+            } else {
+                showAlarm(`${monthPlayLabel} 播放完毕`);
+                stopMonthPlay();
+                render();
+            }
+            return;
+        }
+        if (isPlayAll) {
+            render(); // Re-render to move listened article to history
+            // Find next unlistened article
+            const nextIndex = findNextUnlistened(currentIndex + 1);
+            if (nextIndex >= 0) {
+                showPlayer(nextIndex);
+            } else {
+                stopPlayAll();
+            }
+        } else {
+            // Single play: don't auto-advance, just mark as listened and re-render
+            render();
+        }
+    });
+
+    audio.addEventListener('play', updatePlayButton);
+    audio.addEventListener('pause', updatePlayButton);
+
+    progressBar.addEventListener('input', () => {
+        if (!audio.duration) return;
+        audio.currentTime = (progressBar.value / 100) * audio.duration;
+    });
+
+    // ============== 定时自动播放 ==============
+    const getBeijingNow = () => {
+        const now = new Date();
+        // Convert to Beijing time (UTC+8)
+        const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+        return new Date(utc + 8 * 3600000);
+    };
+
+    const getScheduleConfig = () => {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Migrate from old single-time format
+                if (parsed.hour !== undefined && !parsed.slots) {
+                    return {
+                        enabled: parsed.enabled ?? true,
+                        slots: [
+                            { enabled: true, hour: parsed.hour, minute: parsed.minute ?? 0 },
+                            { enabled: false, hour: 12, minute: 0 },
+                            { enabled: false, hour: 20, minute: 0 },
+                        ],
+                        notifiedDates: {},
+                    };
+                }
+                // Ensure 3 slots exist
+                while (parsed.slots.length < 3) {
+                    parsed.slots.push({ enabled: false, hour: 9, minute: 0 });
+                }
+                return parsed;
+            }
+        } catch(e) {}
+        return { enabled: true, slots: DEFAULT_SLOTS.map(s => ({...s})), notifiedDates: {} };
+    };
+
+    const saveScheduleConfig = (config) => {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch(e) {}
+    };
+
+    const getTodayStr = () => {
+        const bj = getBeijingNow();
+        return `${bj.getFullYear()}-${String(bj.getMonth()+1).padStart(2,'0')}-${String(bj.getDate()).padStart(2,'0')}`;
+    };
+
+    // Try autoplay; returns a Promise. On iOS without user gesture, it rejects.
+    const tryAutoPlay = (index) => {
+        const article = articles[index];
+        if (!article || !article.audio) return Promise.reject('no audio');
+
+        currentIndex = index;
+        const cls = sourceClass(article.source);
+        playerSource.textContent = article.source;
+        playerSource.className = `player-source ${cls}`;
+        playerTitle.textContent = article.title;
+        audio.src = AUDIO_DIR + article.audio;
+        audio.load();
+        player.style.display = 'block';
+
+        const promise = audio.play();
+        updatePlayButton();
+        addPlayLog(article);
+        return promise !== undefined ? promise : Promise.resolve();
+    };
+
+    const checkAutoPlay = () => {
+        const config = getScheduleConfig();
+        if (!config.enabled) return;
+
+        const bj = getBeijingNow();
+        const hour = bj.getHours();
+        const minute = bj.getMinutes();
+        const today = getTodayStr();
+
+        // Check each slot
+        for (let i = 0; i < config.slots.length; i++) {
+            const slot = config.slots[i];
+            if (!slot.enabled) continue;
+            if (hour !== slot.hour || minute !== slot.minute) continue;
+
+            // Per-slot notification tracking
+            const slotNotifiedKey = `${today}-slot${i}`;
+            if (config.notifiedDates[slotNotifiedKey]) continue;
+
+            if (articles.length === 0) continue;
+
+            // Mark this slot as notified
+            config.notifiedDates[slotNotifiedKey] = true;
+            saveScheduleConfig(config);
+
+            const timeStr = `${String(slot.hour).padStart(2,'0')}:${String(slot.minute).padStart(2,'0')}`;
+            const todayArticles = articles.filter(a => a.date === today);
+
+            if (todayArticles.length > 0) {
+                const startIdx = articles.findIndex(a => a.date === today);
+                if (startIdx >= 0) {
+                    isPlayAll = true;
+                    btnPlayAll.classList.add('playing');
+                    btnPlayAll.innerHTML = '&#9646;&#9646; 停止';
+
+                    tryAutoPlay(startIdx).then(() => {
+                        // Autoplay succeeded (desktop, or iOS after previous interaction)
+                        showAlarm(`定时播放 (${timeStr})：今日早报共 ${todayArticles.length} 篇，开始连播...`);
+                    }).catch(() => {
+                        // Autoplay blocked (iOS Safari/Chrome) — show clickable button
+                        showAlarm(
+                            `定时播放 (${timeStr})：今日早报共 ${todayArticles.length} 篇，请点此播放`,
+                            { text: '\u25B6 点击播放', handler: () => {
+                                audio.play().catch(() => {});
+                                updatePlayButton();
+                            }}
+                        );
+                    });
+                }
+            } else {
+                tryAutoPlay(0).then(() => {
+                    showAlarm(`定时播放 (${timeStr})：正在播放最新早报...`);
+                }).catch(() => {
+                    showAlarm(
+                        `定时播放 (${timeStr})：正在播放最新早报，请点此播放`,
+                        { text: '\u25B6 点击播放', handler: () => {
+                            audio.play().catch(() => {});
+                            updatePlayButton();
+                        }}
+                    );
+                });
+            }
+            return; // Only trigger one slot per minute
+        }
+    };
+
+    const startSchedule = () => {
+        if (scheduleTimer) clearInterval(scheduleTimer);
+        // Check every 10 seconds (precise to minute)
+        scheduleTimer = setInterval(checkAutoPlay, 10000);
+        // Also check immediately
+        checkAutoPlay();
+        console.log('[早报电台] 定时播放已启动');
+    };
+
+    // Alarm bar
+    let alarmHideTimer = null;
+
+    const showAlarm = (text, action) => {
+        const bar = document.getElementById('alarm-bar');
+        const alarmText = document.getElementById('alarm-text');
+        const alarmAction = document.getElementById('alarm-action');
+
+        alarmText.textContent = text;
+        bar.style.display = 'flex';
+
+        // Clear previous hide timer
+        if (alarmHideTimer) {
+            clearTimeout(alarmHideTimer);
+            alarmHideTimer = null;
+        }
+
+        // Action button (for iOS autoplay fallback)
+        if (action) {
+            alarmAction.textContent = action.text;
+            alarmAction.style.display = 'inline-block';
+            alarmAction.onclick = () => {
+                action.handler();
+                bar.style.display = 'none';
+                if (alarmHideTimer) {
+                    clearTimeout(alarmHideTimer);
+                    alarmHideTimer = null;
+                }
+            };
+        } else {
+            alarmAction.style.display = 'none';
+            alarmAction.onclick = null;
+            // Auto-hide after 15s only when no action needed
+            alarmHideTimer = setTimeout(() => { bar.style.display = 'none'; }, 15000);
+        }
+
+        // Send browser notification
+        sendNotification('早报电台', text);
+    };
+
+    document.getElementById('alarm-dismiss').addEventListener('click', () => {
+        document.getElementById('alarm-bar').style.display = 'none';
+        if (alarmHideTimer) {
+            clearTimeout(alarmHideTimer);
+            alarmHideTimer = null;
+        }
+    });
+
+    // ============== 帮助弹窗 ==============
+    const helpModal = document.getElementById('help-modal');
+    document.getElementById('btn-help').addEventListener('click', () => {
+        helpModal.style.display = 'block';
+    });
+    document.getElementById('help-close').addEventListener('click', () => {
+        helpModal.style.display = 'none';
+    });
+    document.querySelector('.help-overlay').addEventListener('click', () => {
+        helpModal.style.display = 'none';
+    });
+
+    // ============== 浏览器通知 ==============
+    const requestNotifyPermission = async () => {
+        if (!('Notification' in window)) return false;
+        if (Notification.permission === 'granted') return true;
+        if (Notification.permission === 'denied') return false;
+        const result = await Notification.requestPermission();
+        return result === 'granted';
+    };
+
+    const sendNotification = (title, body) => {
+        if (!('Notification' in window) || Notification.permission !== 'granted') return;
+        try {
+            new Notification(title, {
+                body: body,
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📻</text></svg>',
+                tag: 'daily-radio',
+            });
+        } catch(e) {}
+    };
+
+    // ============== UI 控件 ==============
+    const scheduleToggle = document.getElementById('schedule-toggle');
+    const btnNotify = document.getElementById('btn-notify');
+    const btnPlayAll = document.getElementById('btn-play-all');
+    const slotElements = document.querySelectorAll('.schedule-slot');
+
+    // Build a helper to read slot UI values
+    const readSlotUI = () => {
+        const slots = [];
+        slotElements.forEach((el, i) => {
+            const toggle = el.querySelector('.slot-toggle');
+            const hourSel = el.querySelector('.slot-hour');
+            const minuteSel = el.querySelector('.slot-minute');
+            slots.push({
+                enabled: toggle.checked,
+                hour: parseInt(hourSel.value),
+                minute: parseInt(minuteSel.value),
+            });
+        });
+        return slots;
+    };
+
+    // Load saved config
+    const initConfig = getScheduleConfig();
+    scheduleToggle.checked = initConfig.enabled;
+    slotElements.forEach((el, i) => {
+        const slot = initConfig.slots[i];
+        if (slot) {
+            el.querySelector('.slot-toggle').checked = slot.enabled;
+            el.querySelector('.slot-hour').value = slot.hour;
+            el.querySelector('.slot-minute').value = slot.minute ?? 0;
+        }
+        // Style disabled slots
+        if (!slot || !slot.enabled) el.classList.add('slot-disabled');
+    });
+
+    scheduleToggle.addEventListener('change', () => {
+        const config = getScheduleConfig();
+        config.enabled = scheduleToggle.checked;
+        saveScheduleConfig(config);
+        // Toggle slot visibility
+        document.getElementById('schedule-slots').style.opacity = scheduleToggle.checked ? '1' : '0.4';
+        document.getElementById('schedule-slots').style.pointerEvents = scheduleToggle.checked ? 'auto' : 'none';
+        if (scheduleToggle.checked) {
+            startSchedule();
+        } else if (scheduleTimer) {
+            clearInterval(scheduleTimer);
+            scheduleTimer = null;
+        }
+    });
+
+    // Slot change handlers
+    slotElements.forEach((el, i) => {
+        const toggle = el.querySelector('.slot-toggle');
+        const hourSel = el.querySelector('.slot-hour');
+        const minuteSel = el.querySelector('.slot-minute');
+
+        const saveSlot = () => {
+            const config = getScheduleConfig();
+            config.slots[i].enabled = toggle.checked;
+            config.slots[i].hour = parseInt(hourSel.value);
+            config.slots[i].minute = parseInt(minuteSel.value);
+            // Clear notification for this slot so it can re-trigger
+            const today = getTodayStr();
+            delete config.notifiedDates[`${today}-slot${i}`];
+            saveScheduleConfig(config);
+        };
+
+        toggle.addEventListener('change', () => {
+            el.classList.toggle('slot-disabled', !toggle.checked);
+            saveSlot();
+        });
+        hourSel.addEventListener('change', saveSlot);
+        minuteSel.addEventListener('change', saveSlot);
+    });
+
+    btnNotify.addEventListener('click', async () => {
+        const granted = await requestNotifyPermission();
+        if (granted) {
+            btnNotify.classList.add('notify-on');
+            btnNotify.title = '通知已开启';
+            // Send a test notification
+            sendNotification('早报电台', '通知已开启，到时将自动提醒你收听！');
+        } else {
+            btnNotify.title = '通知被阻止，请在浏览器设置中允许';
+        }
+    });
+
+    // Check if notification is already granted
+    if ('Notification' in window && Notification.permission === 'granted') {
+        btnNotify.classList.add('notify-on');
+        btnNotify.title = '通知已开启';
+    }
+
+    // ============== 连播全部 ==============
+    let isPlayAll = false;
+
+    // ============== 按月播放 ==============
+    let monthPlayList = null;   // Array of article objects for current month play
+    let monthPlayPos = 0;
+    let monthPlayLabel = '';    // For display in alarm
+
+    const playMonth = (ym) => {
+        // Stop any ongoing play-all
+        if (isPlayAll) stopPlayAll();
+        // Build list from active source articles matching this month
+        monthPlayList = articles.filter(a =>
+            (a.date || '').startsWith(ym) &&
+            ACTIVE_SOURCES.some(s => a.source && a.source.includes(s))
+        );
+        if (monthPlayList.length === 0) {
+            showAlarm('本月暂无文章');
+            return;
+        }
+        monthPlayPos = 0;
+        const [y, m] = ym.split('-');
+        monthPlayLabel = `${y}年${parseInt(m)}月`;
+        showPlayer(articles.indexOf(monthPlayList[0]));
+        showAlarm(`开始播放${monthPlayLabel}，共 ${monthPlayList.length} 篇...`);
+    };
+
+    const stopMonthPlay = () => {
+        monthPlayList = null;
+        monthPlayPos = 0;
+        monthPlayLabel = '';
+    };
+
+    // ============== 收藏列表播放 ==============
+    const playList = (list, label) => {
+        if (!list || list.length === 0) {
+            showAlarm('列表为空');
+            return;
+        }
+        if (isPlayAll) stopPlayAll();
+        monthPlayList = list.slice();
+        monthPlayPos = 0;
+        monthPlayLabel = label || '收藏';
+        showPlayer(articles.indexOf(monthPlayList[0]));
+        showAlarm(`开始播放${monthPlayLabel}，共 ${monthPlayList.length} 篇...`);
+    };
+    const playFavoritesMonth = (ym) => {
+        const favSet = getFavoritesSet();
+        const list = articles.filter(a => favSet.has(a.audio) && (a.date || '').startsWith(ym));
+        const [y, m] = ym.split('-');
+        playList(list, `${y}年${parseInt(m)}月收藏`);
+    };
+    const playAllFavorites = () => {
+        const list = getFavoriteArticles();
+        if (list.length === 0) {
+            showAlarm('收藏夹为空');
+            return;
+        }
+        // Sort by date descending
+        list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        playList(list, '所有收藏');
+    };
+
+    const playAllArticles = () => {
+        if (articles.length === 0) return;
+        stopMonthPlay(); // Cancel any month play
+        isPlayAll = true;
+        showPlayer(0);
+        btnPlayAll.classList.add('playing');
+        btnPlayAll.innerHTML = '&#9646;&#9646; 停止';
+        showAlarm(`开始连播全部 ${articles.length} 篇文章...`);
+    };
+
+    const stopPlayAll = () => {
+        isPlayAll = false;
+        stopMonthPlay();
+        audio.pause();
+        audio.currentTime = 0;
+        btnPlayAll.classList.remove('playing');
+        btnPlayAll.innerHTML = '&#9654; 连播';
+    };
+
+    btnPlayAll.addEventListener('click', () => {
+        if (isPlayAll) {
+            stopPlayAll();
+        } else {
+            playAllArticles();
+        }
+    });
+
+    // ============== 声控指令 (Web Speech API) ==============
+    // When voice is ON: audio pauses so mic can hear user clearly.
+    // After command: if command didn't explicitly pause/stop, audio auto-resumes.
+    const btnVoice = document.getElementById('btn-voice');
+    const voiceToast = document.getElementById('voice-toast');
+    const voiceToastText = document.getElementById('voice-toast-text');
+    let voiceActive = false;
+    let recognition = null;
+    let voiceToastTimer = null;
+    let _wasPlayingBefore = false; // Was audio playing when voice was activated?
+    let _resumeTimer = null;       // Timer to auto-resume after unrecognized command
+
+    // Check browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const isVoiceSupported = !!SpeechRecognition;
+
+    // Hide mic button if not supported (iOS Safari)
+    if (!isVoiceSupported) {
+        btnVoice.style.display = 'none';
+    }
+
+    const showVoiceToast = (text, duration) => {
+        if (voiceToastTimer) clearTimeout(voiceToastTimer);
+        voiceToastText.textContent = text;
+        voiceToast.style.display = 'flex';
+        if (duration) {
+            voiceToastTimer = setTimeout(() => { voiceToast.style.display = 'none'; }, duration);
+        }
+    };
+
+    const hideVoiceToast = () => {
+        if (voiceToastTimer) clearTimeout(voiceToastTimer);
+        voiceToast.style.display = 'none';
+    };
+
+    // Cancel any pending auto-resume
+    const cancelResume = () => {
+        if (_resumeTimer) { clearTimeout(_resumeTimer); _resumeTimer = null; }
+    };
+
+    // Auto-resume audio after delay (for unrecognized commands)
+    const scheduleResume = (delay = 2500) => {
+        cancelResume();
+        _resumeTimer = setTimeout(() => {
+            if (voiceActive && _wasPlayingBefore && audio.paused && currentIndex >= 0) {
+                audio.play().catch(() => {});
+                updatePlayButton();
+            }
+        }, delay);
+    };
+
+    // Returns true if the command explicitly controls playback (don't auto-resume)
+    const processVoiceCommand = (transcript) => {
+        const t = transcript.trim();
+        console.log('[早报电台] 声控指令:', t);
+
+        // Normalize: remove spaces
+        const cmd = t.replace(/\s/g, '');
+        let isPlaybackCommand = true; // By default, don't auto-resume
+
+        if (cmd.includes('下一篇') || cmd.includes('下一个') || cmd.includes('下一曲')) {
+            playNext();
+            showVoiceToast('▶ 下一篇', 2000);
+            // playNext calls showPlayer which auto-plays — don't resume
+        } else if (cmd.includes('上一篇') || cmd.includes('上一个') || cmd.includes('上一曲')) {
+            playPrev();
+            showVoiceToast('▶ 上一篇', 2000);
+        } else if (cmd.includes('暂停') || cmd.includes('停止播') || cmd === '停') {
+            audio.pause();
+            updatePlayButton();
+            _wasPlayingBefore = false; // User explicitly paused, don't resume
+            showVoiceToast('⏸ 已暂停', 2000);
+        } else if (cmd.includes('播放') || cmd.includes('开始') || cmd.includes('继续')) {
+            if (currentIndex < 0 && articles.length > 0) {
+                showPlayer(0);
+            } else {
+                audio.play().catch(() => {});
+                updatePlayButton();
+            }
+            showVoiceToast('▶ 播放', 2000);
+        } else if (cmd.includes('连播') || cmd.includes('全部播放') || cmd.includes('播放全部')) {
+            if (!isPlayAll) {
+                playAllArticles();
+            }
+            showVoiceToast('▶ 连播全部', 2000);
+        } else if (cmd.includes('停止') || cmd.includes('取消连播') || cmd.includes('退出')) {
+            if (isPlayAll) stopPlayAll();
+            audio.pause();
+            audio.currentTime = 0;
+            updatePlayButton();
+            _wasPlayingBefore = false; // User explicitly stopped
+            showVoiceToast('⏹ 已停止', 2000);
+        } else if (cmd.includes('第一篇') || cmd.includes('从头')) {
+            if (articles.length > 0) showPlayer(0);
+            showVoiceToast('▶ 第一篇', 2000);
+        } else if (cmd.includes('最后一篇') || cmd.includes('最后')) {
+            if (articles.length > 0) showPlayer(articles.length - 1);
+            showVoiceToast('▶ 最后一篇', 2000);
+        } else {
+            isPlaybackCommand = false;
+            showVoiceToast('❓ 未识别: ' + t, 2500);
+        }
+        return isPlaybackCommand;
+    };
+
+    const startVoice = () => {
+        if (!isVoiceSupported) return;
+        if (recognition) {
+            recognition.abort();
+        }
+        recognition = new SpeechRecognition();
+        recognition.lang = 'zh-CN';
+        recognition.continuous = true;
+        recognition.interimResults = false;
+
+        recognition.onstart = () => {
+            voiceActive = true;
+            btnVoice.classList.add('voice-on');
+            // Pause audio so mic can hear user clearly
+            _wasPlayingBefore = !audio.paused && currentIndex >= 0;
+            if (_wasPlayingBefore) {
+                audio.pause();
+                updatePlayButton();
+            }
+            showVoiceToast('🎤 正在聆听... 试试说「播放」「下一篇」「暂停」', 0);
+        };
+
+        recognition.onresult = (event) => {
+            cancelResume();
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                if (event.results[i].isFinal) {
+                    const handled = processVoiceCommand(event.results[i][0].transcript);
+                    // If command was not recognized, schedule auto-resume
+                    if (!handled) {
+                        scheduleResume(2500);
+                    }
+                }
+            }
+        };
+
+        recognition.onerror = (event) => {
+            if (event.error === 'not-allowed') {
+                showVoiceToast('麦克风权限被拒绝', 3000);
+                stopVoice();
+            } else if (event.error === 'no-speech') {
+                // Chrome fires this when only ambient noise — silently restart
+            } else if (event.error === 'aborted') {
+                // User-initiated stop, do nothing
+            } else {
+                console.warn('[早报电台] 语音识别错误:', event.error);
+            }
+        };
+
+        recognition.onend = () => {
+            // Auto-restart if still active (recognition stops after each result)
+            if (voiceActive) {
+                try { recognition.start(); } catch(e) {}
+            }
+        };
+
+        try {
+            recognition.start();
+        } catch(e) {
+            showVoiceToast('启动语音失败', 2000);
+        }
+    };
+
+    const stopVoice = () => {
+        voiceActive = false;
+        cancelResume();
+        btnVoice.classList.remove('voice-on');
+        hideVoiceToast();
+        // Resume audio if it was playing before voice was activated
+        if (_wasPlayingBefore && audio.paused && currentIndex >= 0) {
+            audio.play().catch(() => {});
+            updatePlayButton();
+        }
+        _wasPlayingBefore = false;
+        if (recognition) {
+            try { recognition.abort(); } catch(e) {}
+            recognition = null;
+        }
+    };
+
+    btnVoice.addEventListener('click', () => {
+        if (voiceActive) {
+            stopVoice();
+        } else {
+            startVoice();
+        }
+    });
+
+    // Load data
+    fetch(DATA_URL)
+        .then(r => r.json())
+        .then(data => {
+            articles = data;
+            render();
+            // Start schedule after data loaded
+            startSchedule();
+            // Sync listened state from Supabase (async, re-render when done)
+            syncListenedFromCloud().then(() => render());
+        })
+        .catch(() => {
+            articleList.innerHTML = '<p class="loading">数据加载失败，请刷新重试</p>';
+        });
+
+    // Expose to global
+    window.app = { play: showPlayer, markListened: (idx) => { markListened(articles[idx]); render(); }, markUnlistened: (idx) => { markUnlistened(articles[idx]); render(); }, playMonth: playMonth, toggleFav: (idx) => { toggleFavorite(articles[idx]); render(); }, playFavMonth: playFavoritesMonth, playAllFav: playAllFavorites };
+
+    // ============== 收藏面板控制 ==============
+    const btnFavorites = document.getElementById('btn-favorites');
+    const favPanel = document.getElementById('favorites-panel');
+    const favOverlay = document.getElementById('favorites-overlay');
+    const favClose = document.getElementById('favorites-close');
+    const btnPlayAllFav = document.getElementById('btn-play-all-fav');
+    if (btnFavorites) {
+        btnFavorites.addEventListener('click', () => {
+            favPanel.classList.add('open');
+            favOverlay.classList.add('open');
+            renderFavorites();
+        });
+    }
+    const closeFavPanel = () => {
+        favPanel.classList.remove('open');
+        favOverlay.classList.remove('open');
+    };
+    if (favClose) favClose.addEventListener('click', closeFavPanel);
+    if (favOverlay) favOverlay.addEventListener('click', closeFavPanel);
+    if (btnPlayAllFav) btnPlayAllFav.addEventListener('click', playAllFavorites);
+
+    // ============== 运行日志查看器 ==============
+    const btnLog = document.getElementById('btn-log');
+    const logModal = document.getElementById('log-modal');
+    const logClose = document.getElementById('log-close');
+    const logOverlay = document.querySelector('.log-overlay');
+    const logBody = document.getElementById('log-body');
+
+    const statusMap = { ok: '✅', fail: '❌', skip: '⏭️' };
+    const modeColor = { '本地': '#2d6a4f', 'AI自动化': '#e76f51', 'CI': '#1982c4' };
+
+    async function loadRunLog() {
+        logBody.innerHTML = '<p class="loading">加载中...</p>';
+        try {
+            const resp = await fetch('data/tts_run_log.json?t=' + Date.now());
+            const data = await resp.json();
+            if (!data || data.length === 0) {
+                logBody.innerHTML = '<p class="log-empty">暂无运行日志</p>';
+                return;
+            }
+            // Group by date
+            const grouped = {};
+            data.forEach(e => {
+                const date = (e.timestamp || '').substring(0, 10);
+                if (!grouped[date]) grouped[date] = [];
+                grouped[date].push(e);
+            });
+            let html = '';
+            for (const [date, entries] of Object.entries(grouped)) {
+                html += `<div class="log-date">${date}</div>`;
+                html += '<div class="log-entries">';
+                entries.forEach(e => {
+                    const time = (e.timestamp || '').substring(11, 19);
+                    const icon = statusMap[e.status] || '❓';
+                    const modeStyle = modeColor[e.mode] ? `style="color:${modeColor[e.mode]}"` : '';
+                    const audioStr = e.audio ? `<span class="log-audio">${e.audio}</span>` : '';
+                    const reasonStr = e.reason ? `<span class="log-reason">${e.reason}</span>` : '';
+                    html += `<div class="log-entry">
+                        <span class="log-icon">${icon}</span>
+                        <span class="log-time">${time}</span>
+                        <span class="log-source" ${modeStyle}>${e.source || '?'}</span>
+                        <span class="log-title">${(e.title || '').substring(0, 30)}</span>
+                        ${audioStr}${reasonStr}
+                    </div>`;
+                });
+                html += '</div>';
+            }
+            logBody.innerHTML = html;
+        } catch (err) {
+            logBody.innerHTML = `<p class="log-empty">加载失败: ${err.message}</p>`;
+        }
+    }
+
+    btnLog.addEventListener('click', () => {
+        logModal.style.display = 'block';
+        loadRunLog();
+    });
+    logClose.addEventListener('click', () => { logModal.style.display = 'none'; });
+    logOverlay.addEventListener('click', () => { logModal.style.display = 'none'; });
+
+    // ============== 播放日志查看器 ==============
+    const btnPlayLog = document.getElementById('btn-play-log');
+    const playLogModal = document.getElementById('playlog-modal');
+    const playLogClose = document.getElementById('playlog-close');
+    const playLogOverlay = document.querySelector('.playlog-overlay');
+    const playLogBody = document.getElementById('playlog-body');
+
+    let lastRemoteError = '';
+
+    const renderPlayLogs = async () => {
+        playLogBody.innerHTML = '<p class="loading">加载中...</p>';
+
+        // 仅从 Supabase 获取远程日志
+        const logs = await fetchRemotePlayLogs();
+
+        // 按时间倒序
+        logs.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+
+        if (logs.length === 0) {
+            playLogBody.innerHTML = '<p class="log-empty">暂无播放记录</p>';
+            return;
+        }
+
+        // Group by date
+        const grouped = {};
+        logs.forEach(e => {
+            const date = (e.time || '').substring(0, 10);
+            if (!grouped[date]) grouped[date] = [];
+            grouped[date].push(e);
+        });
+        let html = '';
+        if (supabaseInitError) {
+            html += `<div class="playlog-sync-badge" style="color:#dc3545;background:#f8d7da;">❌ 同步失败: ${supabaseInitError}</div>`;
+        } else if (lastRemoteError) {
+            html += `<div class="playlog-sync-badge" style="color:#dc3545;background:#f8d7da;">❌ 同步失败: ${lastRemoteError}</div>`;
+        } else if (SUPABASE_ENABLED) {
+            html += `<div class="playlog-sync-badge">☁️ 已同步 (${logs.length} 条)</div>`;
+        } else {
+            html += `<div class="playlog-sync-badge">⚠️ 未配置云端同步</div>`;
+        }
+        for (const [date, entries] of Object.entries(grouped)) {
+            html += `<div class="log-date">${date}</div>`;
+            html += '<div class="log-entries">';
+            entries.forEach(e => {
+                const time = (e.time || '').substring(11, 19);
+                const cls = sourceClass(e.source);
+                html += `<div class="log-entry">
+                    <span class="log-icon">🎧</span>
+                    <span class="log-time">${time}</span>
+                    <span class="playlog-ip">${e.ip || '?'}</span>
+                    <span class="log-source ${cls}">${e.source || '?'}</span>
+                    <span class="log-title">${(e.title || '').substring(0, 30)}</span>
+                </div>`;
+            });
+            html += '</div>';
+        }
+        playLogBody.innerHTML = html;
+    };
+
+    btnPlayLog.addEventListener('click', () => {
+        playLogModal.style.display = 'block';
+        renderPlayLogs();
+    });
+    playLogClose.addEventListener('click', () => { playLogModal.style.display = 'none'; });
+    playLogOverlay.addEventListener('click', () => { playLogModal.style.display = 'none'; });
+})();
