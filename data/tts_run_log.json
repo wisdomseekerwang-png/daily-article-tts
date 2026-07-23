@@ -1,5 +1,31 @@
 [
   {
+    "timestamp": "2026-07-23 09:55:13",
+    "source": "龙哥白话堂",
+    "title": "左轮手枪还是旋钮？新冠风险其实你能调",
+    "audio": "20260723_龙哥白话堂_左轮手枪还是旋钮？新冠风险其实你能调.mp3",
+    "status": "ok",
+    "mode": "AI自动化"
+  },
+  {
+    "timestamp": "2026-07-23 09:53:16",
+    "source": "猫笔刀",
+    "title": "惊天大大大大大逆转",
+    "audio": "20260723_猫笔刀_惊天大大大大大逆转.mp3",
+    "status": "ok",
+    "mode": "本地",
+    "reason": ""
+  },
+  {
+    "timestamp": "2026-07-22 09:53:10",
+    "source": "猫笔刀",
+    "title": "惊天大大大大大逆转",
+    "audio": "20260722_猫笔刀_惊天大大大大大逆转.mp3",
+    "status": "ok",
+    "mode": "本地",
+    "reason": ""
+  },
+  {
     "timestamp": "2026-07-21 09:53:53",
     "source": "龙哥白话堂",
     "title": "龙哥 PubMed 每周精选 - 卡介苗疫苗逆袭：老疫苗才是真高手？",
@@ -4431,33 +4457,6 @@
   {
     "timestamp": "2026-06-09 15:30:38",
     "source": "海里的小龙龙",
-    "title": "",
-    "audio": "",
-    "status": "fail",
-    "mode": "本地",
-    "reason": "获取文章失败"
-  },
-  {
-    "timestamp": "2026-06-09 15:30:38",
-    "source": "远方青木",
-    "title": "",
-    "audio": "",
-    "status": "fail",
-    "mode": "本地",
-    "reason": "获取文章失败"
-  },
-  {
-    "timestamp": "2026-06-09 15:30:38",
-    "source": "格兰投研",
-    "title": "",
-    "audio": "",
-    "status": "fail",
-    "mode": "本地",
-    "reason": "获取文章失败"
-  },
-  {
-    "timestamp": "2026-06-09 15:30:38",
-    "source": "价值事务所",
     "title": "",
     "audio": "",
     "status": "fail",
