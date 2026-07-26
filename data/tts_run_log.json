@@ -1,5 +1,14 @@
 [
   {
+    "timestamp": "2026-07-26 19:43:34",
+    "source": "猫笔刀",
+    "title": "忘不掉的2块钱",
+    "audio": "20260726_猫笔刀_忘不掉的2块钱.mp3",
+    "status": "ok",
+    "mode": "本地",
+    "reason": ""
+  },
+  {
     "timestamp": "2026-07-25 19:48:02",
     "source": "猫笔刀",
     "title": "没想到这么惨，82%亏钱",
@@ -4453,14 +4462,5 @@
     "status": "ok",
     "mode": "本地",
     "reason": ""
-  },
-  {
-    "timestamp": "2026-06-09 15:30:38",
-    "source": "孥孥的大树",
-    "title": "",
-    "audio": "",
-    "status": "fail",
-    "mode": "本地",
-    "reason": "获取文章失败"
   }
 ]
