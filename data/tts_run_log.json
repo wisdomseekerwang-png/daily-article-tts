@@ -1,5 +1,14 @@
 [
   {
+    "timestamp": "2026-07-30 20:38:20",
+    "source": "猫笔刀",
+    "title": "隔壁股灾了",
+    "audio": "20260730_猫笔刀_隔壁股灾了.mp3",
+    "status": "ok",
+    "mode": "本地",
+    "reason": ""
+  },
+  {
     "timestamp": "2026-07-29 19:50:38",
     "source": "猫笔刀",
     "title": "光都熄灭了",
@@ -4447,15 +4456,6 @@
   {
     "timestamp": "2026-06-09 16:38:30",
     "source": "格兰投研",
-    "title": "",
-    "audio": "",
-    "status": "fail",
-    "mode": "本地",
-    "reason": "获取文章失败"
-  },
-  {
-    "timestamp": "2026-06-09 16:38:30",
-    "source": "价值事务所",
     "title": "",
     "audio": "",
     "status": "fail",
