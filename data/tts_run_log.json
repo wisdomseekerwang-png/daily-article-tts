@@ -1,5 +1,13 @@
 [
   {
+    "timestamp": "2026-08-03 09:55:13",
+    "source": "龙哥白话堂",
+    "title": "龙哥PubMed每周精选 - 首部长新冠指南：弃药挺菌",
+    "audio": "20260803_龙哥白话堂_龙哥PubMed每周精选 - 首部长新冠指南：弃药.mp3",
+    "status": "ok",
+    "mode": "AI自动化"
+  },
+  {
     "timestamp": "2026-08-03 09:54:18",
     "source": "猫笔刀",
     "title": "小跑回来上钟",
@@ -4446,15 +4454,6 @@
   {
     "timestamp": "2026-06-09 16:38:30",
     "source": "孥孥的大树",
-    "title": "",
-    "audio": "",
-    "status": "fail",
-    "mode": "本地",
-    "reason": "获取文章失败"
-  },
-  {
-    "timestamp": "2026-06-09 16:38:30",
-    "source": "卢克文工作室",
     "title": "",
     "audio": "",
     "status": "fail",
