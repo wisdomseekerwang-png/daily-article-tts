@@ -1,5 +1,14 @@
 [
   {
+    "timestamp": "2026-10-03 19:41:03",
+    "source": "猫笔刀",
+    "title": "熬不过，我认输了。",
+    "audio": "20261003_猫笔刀_熬不过，我认输了。.mp3",
+    "status": "ok",
+    "mode": "本地",
+    "reason": ""
+  },
+  {
     "timestamp": "2026-10-02 19:46:22",
     "source": "猫笔刀",
     "title": "恐怖半分钟",
@@ -4441,15 +4450,6 @@
   {
     "timestamp": "2026-06-10 11:48:06",
     "source": "远方青木",
-    "title": "",
-    "audio": "",
-    "status": "fail",
-    "mode": "本地",
-    "reason": "获取文章失败"
-  },
-  {
-    "timestamp": "2026-06-10 11:48:06",
-    "source": "格兰投研",
     "title": "",
     "audio": "",
     "status": "fail",
