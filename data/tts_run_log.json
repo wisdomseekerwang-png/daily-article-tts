@@ -1,5 +1,14 @@
 [
   {
+    "timestamp": "2026-10-06 10:50:06",
+    "source": "猫笔刀",
+    "title": "我逼ai去挣钱",
+    "audio": "20261006_猫笔刀_我逼ai去挣钱.mp3",
+    "status": "ok",
+    "mode": "本地",
+    "reason": ""
+  },
+  {
     "timestamp": "2026-10-04 19:47:41",
     "source": "猫笔刀",
     "title": "概率大大大逆转",
@@ -4441,15 +4450,6 @@
     "timestamp": "2026-06-10 11:48:06",
     "source": "孥孥的大树",
     "title": "创新高,再搞波大的!",
-    "audio": "",
-    "status": "fail",
-    "mode": "本地",
-    "reason": ""
-  },
-  {
-    "timestamp": "2026-06-10 11:48:06",
-    "source": "卢克文工作室",
-    "title": "卢克文工作室城市研学&mdash;泉州站",
     "audio": "",
     "status": "fail",
     "mode": "本地",
