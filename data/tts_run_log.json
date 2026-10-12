@@ -1,5 +1,14 @@
 [
   {
+    "timestamp": "2026-10-12 10:07:18",
+    "source": "猫笔刀",
+    "title": "少200亿要命了",
+    "audio": "20261012_猫笔刀_少200亿要命了.mp3",
+    "status": "ok",
+    "mode": "本地",
+    "reason": ""
+  },
+  {
     "timestamp": "2026-10-11 10:07:03",
     "source": "猫笔刀",
     "title": "服了，还有这种横财",
@@ -4440,15 +4449,6 @@
   {
     "timestamp": "2026-06-10 12:57:05",
     "source": "格兰投研",
-    "title": "",
-    "audio": "",
-    "status": "fail",
-    "mode": "本地",
-    "reason": "获取文章失败"
-  },
-  {
-    "timestamp": "2026-06-10 12:57:05",
-    "source": "价值事务所",
     "title": "",
     "audio": "",
     "status": "fail",
