@@ -1,5 +1,14 @@
 [
   {
+    "timestamp": "2026-11-06 10:13:51",
+    "source": "猫笔刀",
+    "title": "断奶了，靠自己了",
+    "audio": "20261106_猫笔刀_断奶了，靠自己了.mp3",
+    "status": "ok",
+    "mode": "本地",
+    "reason": ""
+  },
+  {
     "timestamp": "2026-11-05 10:17:19",
     "source": "猫笔刀",
     "title": "打疯了，枪管都打红了",
@@ -4434,15 +4443,6 @@
   {
     "timestamp": "2026-06-10 16:45:59",
     "source": "远方青木",
-    "title": "",
-    "audio": "",
-    "status": "fail",
-    "mode": "本地",
-    "reason": "获取文章失败"
-  },
-  {
-    "timestamp": "2026-06-10 16:45:59",
-    "source": "格兰投研",
     "title": "",
     "audio": "",
     "status": "fail",
