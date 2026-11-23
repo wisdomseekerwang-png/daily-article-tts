@@ -1,5 +1,14 @@
 [
   {
+    "timestamp": "2026-11-23 10:19:16",
+    "source": "猫笔刀",
+    "title": "看错的代价",
+    "audio": "20261123_猫笔刀_看错的代价.mp3",
+    "status": "ok",
+    "mode": "本地",
+    "reason": ""
+  },
+  {
     "timestamp": "2026-11-23 09:38:52",
     "source": "猫笔刀",
     "title": "看错的代价",
@@ -4431,15 +4440,6 @@
   {
     "timestamp": "2026-06-10 18:01:50",
     "source": "格兰投研",
-    "title": "",
-    "audio": "",
-    "status": "fail",
-    "mode": "本地",
-    "reason": "获取文章失败"
-  },
-  {
-    "timestamp": "2026-06-10 18:01:50",
-    "source": "价值事务所",
     "title": "",
     "audio": "",
     "status": "fail",
